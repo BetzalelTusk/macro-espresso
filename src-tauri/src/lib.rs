@@ -1,3 +1,4 @@
+mod files;
 mod services;
 mod shortcuts;
 
@@ -388,7 +389,11 @@ pub fn run() {
             quit,
             services::ensure_service,
             services::restart_service,
-            services::reveal_log
+            services::reveal_log,
+            files::fs_places,
+            files::fs_list,
+            files::fs_open,
+            files::fs_reveal
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

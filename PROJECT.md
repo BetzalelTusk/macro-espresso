@@ -37,6 +37,8 @@ and the "busy" status dot. Anywhere else is a bug.
 | `components/Panes.tsx` | One pane or a split: pane bodies (where webviews go), split headers, the divider | A second layout system or absolute-positioned webview hosts |
 | `useLayout.ts` | Which tabs are on screen, focus, split ratio, tab statuses; `apply` starts tools and calls `show_tabs` | Calling `show_tabs`/`ensure_service` from components |
 | `StageMessage` in `App.tsx` | The text in a pane for each `TabStatus` | Toasts for tab state |
+| `components/Files.tsx` | The Files tab: places, breadcrumbs, filter, a virtualised list (only visible rows render), native context menu | Rendering every row of a folder; HTML context menus |
+| `src-tauri/src/files.rs` | `fs_places`, `fs_list` (off the main thread), `fs_open`, `fs_reveal` | Calling `std::fs` from a sync command (freezes the window on big folders) |
 | Native `Menu` (`@tauri-apps/api/menu`) | Right-click menus on rail tabs | HTML context menus (they'd draw under websites) |
 
 Icons: `lucide-react` only, `strokeWidth` 1.6–1.8, sizes 14/16/18/20.
@@ -60,6 +62,8 @@ Icons: `lucide-react` only, `strokeWidth` 1.6–1.8, sizes 14/16/18/20.
 |---|---|---|
 | raw `#000` | `components/rail.css` mask on `.rail-mark` | Mask alpha, never a visible colour |
 | inline `style` | `components/Ambient.tsx` tick grid columns and per-tick `animationDelay` | Values computed per element |
+| inline `style` | `components/Files.tsx` virtual list height and per-row `translateY` | Positions computed from the scroll offset |
+| inline CSS variables | `components/Panes.tsx` `--split-left/right` | The divider ratio, written per frame while dragging |
 
 ## 4. Structural ideas
 
@@ -69,6 +73,7 @@ Icons: `lucide-react` only, `strokeWidth` 1.6–1.8, sizes 14/16/18/20.
 | Stage (no tab showing) | A framed centre: four registration crosses around one short message. Eyebrow (tab name, label style) + title (state) + optional detail/action |
 | Rail | A dark instrument strip: icon, active marker on the inline-start edge, a dot only when something isn't simply fine |
 | Split | Two panes with label-style headers; the focused one carries the accent line; rail clicks and Ctrl+1-9 change the focused pane |
+| Files | A dense directory, not a gallery: one 32px row per item, the name is the subject; size and date in secondary ink; places on the side, path on top. Narrow panes drop places, then dates (container queries on `.files-frame`) |
 
 **Patterns deleted on purpose**
 

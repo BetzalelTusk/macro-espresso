@@ -13,6 +13,7 @@ import {
   SquareX,
 } from "lucide-react";
 import { Ambient } from "./components/Ambient";
+import { Files } from "./components/Files";
 import { Palette, type PaletteCommand } from "./components/Palette";
 import { Panes } from "./components/Panes";
 import { Rail } from "./components/Rail";
@@ -253,7 +254,10 @@ function App() {
           onDragStart={hideAll}
           onDragEnd={reshow}
           renderMessage={(id) =>
-            paletteOpen ? null : (
+            id === "files" ? (
+              // Native view: stays mounted (folder, scroll) even under the palette.
+              <Files />
+            ) : paletteOpen ? null : (
               <StageMessage tab={tabById(id)} status={paneStatus(id)} onRetry={() => void reload(tabById(id))} />
             )
           }
@@ -275,15 +279,7 @@ function StageMessage({
   status: TabStatus;
   onRetry: () => void;
 }) {
-  if (tab.kind === "native") {
-    return (
-      <div className="stage-message">
-        <p className="stage-eyebrow">{tab.name}</p>
-        <p className="stage-title">Not built yet</p>
-        <p className="stage-detail">Your files and Google Drive will live here.</p>
-      </div>
-    );
-  }
+  if (tab.kind === "native") return null;
   switch (status.state) {
     case "starting":
       return (

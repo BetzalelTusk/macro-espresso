@@ -1,0 +1,387 @@
+/*
+ * Files: a dense directory, not a gallery. One row per item, the name is the
+ * subject; size and date are secondary ink. Places on the side, path on top.
+ */
+/* The container the narrow-pane queries measure; a container can't restyle
+   itself, so the grid lives one level in. */
+.files-frame {
+  position: absolute;
+  inset: 0;
+  container-type: inline-size;
+}
+
+.files {
+  display: grid;
+  grid-template-columns: 196px minmax(0, 1fr);
+  height: 100%;
+  background: var(--ground-2);
+  font: var(--text-body);
+}
+
+.files-places {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-3) var(--space-2);
+  overflow-y: auto;
+  background: var(--ground-1);
+  border-inline-end: 1px solid var(--line);
+}
+
+.files-heading {
+  margin: 0;
+  padding: var(--space-1) var(--space-2) var(--space-2);
+  font: var(--text-label);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.files-place {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 30px;
+  padding-inline: var(--space-2);
+  border: none;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--ink-2);
+  text-align: start;
+  cursor: pointer;
+  transition:
+    background-color var(--t-micro) var(--ease-out),
+    color var(--t-micro) var(--ease-out);
+}
+
+.files-place span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.files-place:hover {
+  background: var(--ground-3);
+  color: var(--ink-1);
+}
+
+.files-place:active {
+  background: var(--ground-4);
+}
+
+.files-place[aria-current="location"] {
+  background: var(--ground-3);
+  color: var(--ink-1);
+}
+
+.files-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.files-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 48px;
+  padding-inline: var(--space-3);
+  border-block-end: 1px solid var(--line);
+}
+
+.files-nav {
+  display: flex;
+  gap: 2px;
+}
+
+.files-icon-button {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--ink-2);
+  cursor: pointer;
+  transition:
+    background-color var(--t-micro) var(--ease-out),
+    color var(--t-micro) var(--ease-out);
+}
+
+.files-icon-button:hover:not(:disabled) {
+  background: var(--ground-3);
+  color: var(--ink-1);
+}
+
+.files-icon-button:active:not(:disabled) {
+  background: var(--ground-4);
+}
+
+.files-icon-button:disabled {
+  color: var(--ground-4);
+  cursor: default;
+}
+
+.files-icon-button[aria-pressed="true"] {
+  color: var(--ink-1);
+}
+
+.files-crumbs {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  list-style: none;
+  color: var(--ink-3);
+}
+
+.files-crumbs li {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  flex-shrink: 1;
+}
+
+/* Keep the current folder readable: earlier segments give way first. */
+.files-crumbs li:last-child {
+  flex-shrink: 0;
+  max-width: 60%;
+}
+
+.files-crumb {
+  min-width: 0;
+  max-width: 100%;
+  padding: var(--space-1) var(--space-2);
+  overflow: hidden;
+  border: none;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--ink-2);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.files-crumb:hover {
+  background: var(--ground-3);
+  color: var(--ink-1);
+}
+
+.files-crumb[aria-current="location"] {
+  color: var(--ink-1);
+  font-weight: 500;
+}
+
+.files-filter {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: none;
+  width: 180px;
+  height: 30px;
+  padding-inline: var(--space-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--ground-1);
+  color: var(--ink-3);
+}
+
+.files-filter:focus-within {
+  border-color: var(--ink-3);
+}
+
+.files-filter input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  color: var(--ink-1);
+  font: inherit;
+  outline: none;
+}
+
+.files-filter input::placeholder {
+  color: var(--ink-3);
+}
+
+.files-columns,
+.files-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 96px 176px;
+  align-items: center;
+  gap: var(--space-3);
+  padding-inline: var(--space-4);
+}
+
+.files-columns {
+  height: 30px;
+  border-block-end: 1px solid var(--line);
+}
+
+.files-column {
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--ink-3);
+  font: var(--text-label);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  text-align: start;
+  cursor: pointer;
+}
+
+.files-column:hover {
+  color: var(--ink-1);
+}
+
+.files-column-size,
+.files-cell-size {
+  text-align: end;
+}
+
+.files-list {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  outline: none;
+}
+
+.files-rows {
+  position: relative;
+}
+
+.files-row {
+  position: absolute;
+  inset-inline: 0;
+  inset-block-start: 0;
+  height: 32px;
+  color: var(--ink-2);
+  cursor: default;
+  user-select: none;
+}
+
+.files-row:hover {
+  background: var(--ground-3);
+}
+
+.files-row[aria-selected="true"] {
+  background: var(--ground-4);
+  color: var(--ink-1);
+}
+
+.files-list:focus-visible .files-row[aria-selected="true"] {
+  box-shadow: inset 2px 0 0 0 var(--accent);
+}
+
+.files-row[data-dir] .files-name {
+  color: var(--ink-1);
+}
+
+.files-cell {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.files-cell-name {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.files-cell-name svg {
+  flex: none;
+  color: var(--ink-3);
+}
+
+.files-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.files-cell-size,
+.files-cell-date {
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.files-state {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-2);
+  padding: var(--space-6) var(--space-4);
+  text-align: center;
+}
+
+.files-state p {
+  margin: 0;
+}
+
+.files-state-title {
+  font: var(--text-title);
+  color: var(--ink-1);
+}
+
+.files-state-detail {
+  max-width: 420px;
+  color: var(--ink-3);
+}
+
+.files-state-action {
+  margin-block-start: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--ground-3);
+  color: var(--ink-1);
+  cursor: pointer;
+}
+
+.files-state-action:hover {
+  background: var(--ground-4);
+}
+
+.files-status {
+  height: 28px;
+  padding-inline: var(--space-4);
+  border-block-start: 1px solid var(--line);
+  color: var(--ink-3);
+  font: var(--text-label);
+  line-height: 28px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Narrow panes: drop the places column, then the date. */
+@container (max-width: 620px) {
+  .files {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .files-places {
+    display: none;
+  }
+  .files-filter {
+    width: 130px;
+  }
+}
+
+@container (max-width: 460px) {
+  .files-columns,
+  .files-row {
+    grid-template-columns: minmax(0, 1fr) 80px;
+  }
+  .files-column-date,
+  .files-cell-date {
+    display: none;
+  }
+}

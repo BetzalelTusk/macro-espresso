@@ -28,7 +28,7 @@ never push. Sign-in work means the sign-in *page* works and persists, not signin
 
 ## To build
 
-- [ ] **Files tab**: native file browser for local files (Tauri fs/commands):
+- [x] **Files tab**: native file browser for local files (Tauri fs/commands):
   sidebar of places (Home, Desktop, Documents, Downloads, drives), breadcrumb path,
   list with icon/name/size/modified, sort, open with default app, reveal in Explorer,
   keyboard navigation, loading/empty/error states, follows PROJECT.md. Google Drive
@@ -79,3 +79,10 @@ never push. Sign-in work means the sign-in *page* works and persists, not signin
   node command line was never matched before). Verified: dashboard after clean start (24s)
   and after palette Restart (21s, self-reconnects); quit leaves 0 postgres; no sign-in needed
   (trusted local mode). Test harness: scratchpad harness.mjs, t3-test.mjs, paperclip-test.mjs.
+- Files tab built: places (standard folders + drives), back/forward/up, breadcrumbs, filter,
+  sortable columns, hidden-files toggle, virtualised list, double-click/Enter opens (folders in
+  place, files in their app), right-click Open / Show in Explorer / Copy path, Backspace and
+  Alt+arrows, remembered folder. Verified: System32 (4,677 items) lists in ~1s and scrolls at
+  60 fps with 38 rows in the DOM; access-denied shows a clear message; narrow panes drop
+  places then dates (fixed a container-query bug that left the list 196px wide). Google Drive
+  still needs the user's own Google OAuth app.
