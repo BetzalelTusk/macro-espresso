@@ -4,9 +4,13 @@ import "./rail.css";
 
 type Props = {
   tabs: Tab[];
+  /** The focused pane's tab: gets the accent marker. */
   activeId: string;
+  /** Every tab on screen (two in a split). */
+  shownIds: string[];
   statuses: Record<string, TabStatus>;
   onSelect: (tab: Tab) => void;
+  onMenu: (tab: Tab) => void;
   onPalette: () => void;
 };
 
@@ -38,7 +42,7 @@ function statusLabel(status: TabStatus | undefined): string {
   }
 }
 
-export function Rail({ tabs, activeId, statuses, onSelect, onPalette }: Props) {
+export function Rail({ tabs, activeId, shownIds, statuses, onSelect, onMenu, onPalette }: Props) {
   return (
     <nav className="rail" aria-label="Tabs">
       <div className="rail-mark" aria-hidden="true" />
@@ -54,9 +58,14 @@ export function Rail({ tabs, activeId, statuses, onSelect, onPalette }: Props) {
                 type="button"
                 className="rail-tab"
                 aria-current={active ? "page" : undefined}
+                data-shown={(!active && shownIds.includes(tab.id)) || undefined}
                 aria-label={`${tab.name}${statusLabel(statuses[tab.id])}`}
                 title={shortcut ? `${tab.name}  ·  ${shortcut}` : tab.name}
                 onClick={() => onSelect(tab)}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  onMenu(tab);
+                }}
               >
                 <Icon size={20} strokeWidth={1.6} aria-hidden="true" />
                 {dot && <span className="rail-dot" data-dot={dot} aria-hidden="true" />}

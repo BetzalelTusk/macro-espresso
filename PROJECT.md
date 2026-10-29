@@ -23,8 +23,9 @@ never an inline literal.
 | Radius | `--radius-control` (10px), `--radius-panel` (14px) | |
 | Motion | `--t-micro`, `--t-panel`, `--ease-out`, `--t-drift`, `--t-sweep` | See §6 |
 
-**Colour budget.** The accent appears in exactly three places: the active-tab marker,
-the rail's registration-cross mark, and the "busy" status dot. Anywhere else is a bug.
+**Colour budget.** The accent has exactly three roles: "this is active" (the rail's
+active-tab marker, the focused pane's header line), the rail's registration-cross mark,
+and the "busy" status dot. Anywhere else is a bug.
 
 ## 2. Components
 
@@ -33,7 +34,10 @@ the rail's registration-cross mark, and the "busy" status dot. Anywhere else is 
 | `components/Ambient.tsx` | Every in-between state on the stage: loading, starting, error, empty, behind the palette | A per-tab spinner, skeleton or "loading…" div |
 | `components/Rail.tsx` | Tab navigation and per-tab status dots | A second nav bar, a tab strip |
 | `components/Palette.tsx` | Every command (Ctrl+K) | A settings menu that duplicates commands |
-| `StageMessage` in `App.tsx` | The text on the stage for each `TabStatus` | Toasts for tab state |
+| `components/Panes.tsx` | One pane or a split: pane bodies (where webviews go), split headers, the divider | A second layout system or absolute-positioned webview hosts |
+| `useLayout.ts` | Which tabs are on screen, focus, split ratio, tab statuses; `apply` starts tools and calls `show_tabs` | Calling `show_tabs`/`ensure_service` from components |
+| `StageMessage` in `App.tsx` | The text in a pane for each `TabStatus` | Toasts for tab state |
+| Native `Menu` (`@tauri-apps/api/menu`) | Right-click menus on rail tabs | HTML context menus (they'd draw under websites) |
 
 Icons: `lucide-react` only, `strokeWidth` 1.6–1.8, sizes 14/16/18/20.
 
@@ -42,7 +46,8 @@ Icons: `lucide-react` only, `strokeWidth` 1.6–1.8, sizes 14/16/18/20.
 | Forbidden | Use instead | Why |
 |---|---|---|
 | UI drawn over the content area while a tab is showing | Hide tabs first (`hide_tabs`), as the palette does | Tab webviews sit above the UI webview; anything drawn there is invisible |
-| CSS tooltips or menus that extend from the rail into the stage | `title` for now; native menus (Tauri) later | Same reason: they'd render under the tab |
+| CSS tooltips or menus that extend from the rail into the stage | `title` for tooltips; native `Menu` for menus | Same reason: they'd render under the tab |
+| Clickable UI inside a `.pane-body` (or on its edge) | Pane headers, the divider's own grid column (`--divider-width`) | Webviews cover pane bodies completely |
 | Brighter-than-field blobs, saturated aurora | Darker smoke tinted by hue | The reference reads as smoke over graphite, not coloured light |
 | Animating `filter`, size or position of blobs | `transform` only | Blur on large layers is costly; transform stays on the compositor |
 | Animation running under a visible tab | `Ambient paused` when the active tab is ready | Invisible work still costs GPU |
@@ -62,6 +67,7 @@ Icons: `lucide-react` only, `strokeWidth` 1.6–1.8, sizes 14/16/18/20.
 | Whole app | A quiet graphite frame around live apps. The apps are the subject; the frame only becomes expressive in between states |
 | Stage (no tab showing) | A framed centre: four registration crosses around one short message. Eyebrow (tab name, label style) + title (state) + optional detail/action |
 | Rail | A dark instrument strip: icon, active marker on the inline-start edge, a dot only when something isn't simply fine |
+| Split | Two panes with label-style headers; the focused one carries the accent line; rail clicks and Ctrl+1-9 change the focused pane |
 
 **Patterns deleted on purpose**
 

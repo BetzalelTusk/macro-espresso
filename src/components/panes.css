@@ -1,0 +1,112 @@
+.panes {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.panes[data-split] {
+  grid-template-columns:
+    minmax(0, var(--split-left))
+    var(--divider-width)
+    minmax(0, var(--split-right));
+}
+
+.pane {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* Split-only header: which tab, and the pane's own controls. */
+.pane-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: 34px;
+  padding-inline: var(--space-3) var(--space-1);
+  background: var(--ground-1);
+  border-block-end: 1px solid var(--line);
+  color: var(--ink-3);
+  font: var(--text-label);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
+
+.pane[data-focused] .pane-header {
+  color: var(--ink-1);
+  box-shadow: inset 0 2px 0 0 var(--accent);
+}
+
+.pane-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pane-button {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--ink-3);
+  cursor: pointer;
+  transition:
+    background-color var(--t-micro) var(--ease-out),
+    color var(--t-micro) var(--ease-out);
+}
+
+.pane-button:hover {
+  background: var(--ground-3);
+  color: var(--ink-1);
+}
+
+.pane-button:active {
+  background: var(--ground-4);
+}
+
+/* Where the tab webview goes; shows the stage message until it does. */
+.pane-body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+}
+
+/*
+ * The strip between the panes: its own grid column, so no webview covers it.
+ * A hairline at rest; brighter while you hover or move it.
+ */
+.pane-divider {
+  position: relative;
+  background: var(--ground-1);
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.pane-divider::after {
+  content: "";
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 50%;
+  width: 1px;
+  background: var(--line);
+  transition: background-color var(--t-micro) var(--ease-out);
+}
+
+.pane-divider:hover::after,
+.pane-divider:focus-visible::after,
+.pane-divider:active::after {
+  background: var(--ink-mark);
+}
+
+.pane-divider:focus-visible {
+  outline: none;
+}

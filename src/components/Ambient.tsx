@@ -11,6 +11,8 @@ type Props = {
   paused?: boolean;
   /** Tint the crosshairs for a failure state. */
   tone?: "neutral" | "error";
+  /** Draw the registration crosses (single pane; a split has its own seams). */
+  framed?: boolean;
   children?: ReactNode;
 };
 
@@ -19,7 +21,13 @@ type Props = {
  * It shows while a tab loads, while a tool starts, on errors and on empty tabs,
  * and sits under every tab webview so a reveal never flashes white.
  */
-export function Ambient({ busy = false, paused = false, tone = "neutral", children }: Props) {
+export function Ambient({
+  busy = false,
+  paused = false,
+  tone = "neutral",
+  framed = true,
+  children,
+}: Props) {
   return (
     <div className="ambient" data-paused={paused || undefined} data-tone={tone}>
       <div className="ambient-light" aria-hidden="true">
@@ -28,10 +36,14 @@ export function Ambient({ busy = false, paused = false, tone = "neutral", childr
         <span className="blob blob-umber" />
       </div>
       <div className="ambient-frame">
-        <span className="mark mark-start-top" aria-hidden="true" />
-        <span className="mark mark-end-top" aria-hidden="true" />
-        <span className="mark mark-start-bottom" aria-hidden="true" />
-        <span className="mark mark-end-bottom" aria-hidden="true" />
+        {framed && (
+          <>
+            <span className="mark mark-start-top" aria-hidden="true" />
+            <span className="mark mark-end-top" aria-hidden="true" />
+            <span className="mark mark-start-bottom" aria-hidden="true" />
+            <span className="mark mark-end-bottom" aria-hidden="true" />
+          </>
+        )}
         {busy && (
           <div
             className="ticks"

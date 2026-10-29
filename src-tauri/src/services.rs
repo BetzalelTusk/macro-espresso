@@ -366,24 +366,63 @@ fn clean_up_leftovers(spec: &Spec) {
     }
 }
 
+/// Kill a tool's process and everything it spawned.
+fn stop_child(mut child: Child) {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        // `.cmd` shims and Node spawn children; kill the whole tree.
+        let _ = Command::new("taskkill")
+            .args(["/PID", &child.id().to_string(), "/T", "/F"])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .creation_flags(CREATE_NO_WINDOW)
+            .status();
+    }
+    let _ = child.kill();
+    let _ = child.wait();
+}
+
+/// Stop tool `id` (if this shell started it) and its leftovers, so the next
+/// `ensure_service` starts it fresh.
+#[tauri::command]
+pub async fn restart_service(services: State<'_, Services>, id: String) -> Result<(), String> {
+    let spec = spec(&id)?;
+    let run = services.0.lock().map_err(|e| e.to_string())?.remove(&id);
+    if let Some(child) = run.and_then(|r| r.child) {
+        stop_child(child);
+    }
+    clean_up_leftovers(&spec);
+    Ok(())
+}
+
+/// Show tool `id`'s log file in File Explorer.
+#[tauri::command]
+pub async fn reveal_log(app: AppHandle, id: String) -> Result<(), String> {
+    use tauri_plugin_opener::OpenerExt;
+    spec(&id)?;
+    let log = app
+        .path()
+        .app_log_dir()
+        .map_err(|e| e.to_string())?
+        .join(format!("{id}.log"));
+    if !log.exists() {
+        return Err(format!("{id} hasn't written a log yet"));
+    }
+    app.opener()
+        .reveal_item_in_dir(&log)
+        .map_err(|e| e.to_string())
+}
+
 /// Stop every tool this shell started, including their child processes.
 pub fn stop_all(services: &Services) {
     let Ok(mut started) = services.0.lock() else {
         return;
     };
     let specs: Vec<Spec> = started.keys().filter_map(|id| spec(id).ok()).collect();
-    for mut child in started.drain().filter_map(|(_, s)| s.child) {
-        #[cfg(windows)]
-        {
-            // `.cmd` shims and Node spawn children; kill the whole tree.
-            let _ = Command::new("taskkill")
-                .args(["/PID", &child.id().to_string(), "/T", "/F"])
-                .stdout(Stdio::null())
-                .stderr(Stdio::null())
-                .status();
-        }
-        let _ = child.kill();
-        let _ = child.wait();
+    for child in started.drain().filter_map(|(_, s)| s.child) {
+        stop_child(child);
     }
     for spec in &specs {
         clean_up_leftovers(spec);

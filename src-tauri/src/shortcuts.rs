@@ -33,6 +33,8 @@ fn bindings() -> Vec<(Shortcut, &'static str)> {
         "previous-tab",
     ));
     all.push((Shortcut::new(ctrl, Code::KeyK), "palette"));
+    all.push((Shortcut::new(ctrl, Code::Backslash), "toggle-split"));
+    all.push((Shortcut::new(ctrl, Code::KeyQ), "quit"));
     all
 }
 

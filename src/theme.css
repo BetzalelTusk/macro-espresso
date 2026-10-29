@@ -28,8 +28,8 @@
 
   /*
    * Colour budget: the accent is the only saturated colour, and it appears
-   * in exactly three places: the active-tab marker, the logo mark, and the
-   * "starting" status dot. Amber → rose picks up the warm umber hidden in the
+   * in exactly three roles: "this is active" (the rail's active-tab marker,
+   * the focused pane's header line), the logo mark, and the "busy" dot. Amber → rose picks up the warm umber hidden in the
    * reference's ambient light.
    */
   --accent: oklch(0.82 0.13 72);
@@ -67,6 +67,8 @@
 
   --rail-width: 60px;
   --rail-item: 40px;
+  /* Wide enough to grab: webviews cover everything but this strip. */
+  --divider-width: 7px;
 
   --radius-control: 10px;
   --radius-panel: 14px;
