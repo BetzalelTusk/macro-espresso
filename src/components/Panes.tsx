@@ -40,6 +40,9 @@ export function Panes({
   renderMessage,
 }: Props) {
   const container = useRef<HTMLDivElement>(null);
+  // Latest ratio for key repeat: presses can arrive before React re-renders.
+  const ratioRef = useRef(layout.ratio);
+  ratioRef.current = layout.ratio;
   const split = layout.panes.length > 1;
   const style = { "--split-left": `${layout.ratio}fr`, "--split-right": `${1 - layout.ratio}fr` };
 
@@ -62,8 +65,11 @@ export function Panes({
                 aria-valuenow={Math.round(layout.ratio * 100)}
                 tabIndex={0}
                 onKeyDown={(e) => {
-                  if (e.key === "ArrowLeft") onRatio(Math.max(MIN_RATIO, layout.ratio - RATIO_STEP));
-                  if (e.key === "ArrowRight") onRatio(Math.min(MAX_RATIO, layout.ratio + RATIO_STEP));
+                  const step = e.key === "ArrowLeft" ? -RATIO_STEP : e.key === "ArrowRight" ? RATIO_STEP : 0;
+                  if (!step) return;
+                  e.preventDefault();
+                  ratioRef.current = Math.min(MAX_RATIO, Math.max(MIN_RATIO, ratioRef.current + step));
+                  onRatio(ratioRef.current);
                 }}
                 onPointerDown={(e) => {
                   const box = container.current?.getBoundingClientRect();

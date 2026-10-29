@@ -191,6 +191,9 @@ export function useLayout() {
   }, []);
 
   // Keep tab webviews over their panes as the window or the divider moves.
+  // Re-attach whenever the panes change: a swap or a new tab replaces the
+  // pane elements, and an observer on the old ones would never fire again.
+  const panesKey = layout.panes.join("|");
   useEffect(() => {
     const observer = new ResizeObserver(() => {
       // Hidden tabs (palette, divider drag) get their bounds when re-shown.
@@ -201,7 +204,7 @@ export function useLayout() {
       if (el) observer.observe(el);
     }
     return () => observer.disconnect();
-  }, [layout.panes.length, placements]);
+  }, [panesKey, layout.panes.length, placements]);
 
   /** Hide every tab so the shell's own UI (the palette) shows. */
   const hideAll = useCallback(async () => {

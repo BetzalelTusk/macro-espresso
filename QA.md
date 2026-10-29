@@ -40,8 +40,8 @@ never push. Sign-in work means the sign-in *page* works and persists, not signin
 - [x] Rail tooltips feel native (title attr is slow and plain).
 - [x] Notifications from web tabs (WhatsApp) reach Windows while the shell runs.
 - [x] Tab memory: reopening restores each tab's page, not only the layout.
-- [ ] Review every screen against PROJECT.md and the anti-slop audit; fix findings.
-- [ ] Re-run the full regression (below) after all fixes.
+- [x] Review every screen against PROJECT.md and the anti-slop audit; fix findings.
+- [x] Re-run the full regression (below) after all fixes.
 
 ## Regression checklist (run at the end, and after risky changes)
 
@@ -98,3 +98,11 @@ never push. Sign-in work means the sign-in *page* works and persists, not signin
   excluded (one-time sign-in URLs).
 - Rail tooltips: kept the native title tooltip on purpose. Any HTML tooltip would draw into the
   stage, where the tab webviews cover it (PROJECT.md anti-pattern).
+- Review: slop-scan clean apart from the sanctioned exceptions in PROJECT.md; Files covers
+  loading/empty/error/disabled. Fix: film grain moved off content (it textured the Files list)
+  onto the atmosphere only (ambient stage, rail).
+- Regression (scratchpad regression.mjs, 17 checks) found two real bugs, both fixed:
+  pane resize observer kept watching replaced pane elements after a swap or tab change, so
+  tabs stopped following resizes; quick divider arrow-key presses dropped steps. Final run:
+  17/17 (launch/restore, split fit, shortcuts, swap, keyboard resize + tab follows, close pane,
+  palette filter/no-match/Esc/Enter, close-to-tray, single instance, quit leaves nothing).

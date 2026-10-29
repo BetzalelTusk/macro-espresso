@@ -149,7 +149,7 @@
   text-align: center;
 }
 
-/* Grain lives on the whole window (App.css); nothing to add here. */
+/* Grain: `.ambient::after` in App.css, shared with the rail. */
 
 .ambient[data-paused] .blob,
 .ambient[data-paused] .ticks span {

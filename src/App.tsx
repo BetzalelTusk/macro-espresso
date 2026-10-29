@@ -264,7 +264,6 @@ function App() {
         />
         {paletteOpen && <Palette commands={commands} onClose={closePalette} />}
       </main>
-      <div className="grain" aria-hidden="true" />
     </div>
   );
 }
