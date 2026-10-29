@@ -10,7 +10,7 @@ use tauri::{
     WebviewUrl, Window, WindowEvent,
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    webview::PageLoadEvent,
+    webview::{NewWindowResponse, PageLoadEvent},
     window::{Color, WindowBuilder},
 };
 
@@ -61,9 +61,21 @@ struct Place {
 }
 
 impl Place {
-    fn apply<R: tauri::Runtime>(self, webview: &tauri::Webview<R>) -> tauri::Result<()> {
+    /// Move the tab and set its zoom. Zoom is only sent when it changes: a
+    /// zoom call makes pages re-layout, which flickers on every resize.
+    fn apply<R: tauri::Runtime>(
+        self,
+        webview: &tauri::Webview<R>,
+        zooms: &mut HashMap<String, f64>,
+        id: &str,
+    ) -> tauri::Result<()> {
         webview.set_bounds(self.bounds.rect())?;
-        webview.set_zoom(self.zoom)
+        let applied = zooms.get(id).copied().unwrap_or(1.0);
+        if (applied - self.zoom).abs() > f64::EPSILON {
+            webview.set_zoom(self.zoom)?;
+            zooms.insert(id.to_owned(), self.zoom);
+        }
+        Ok(())
     }
 }
 
@@ -91,6 +103,8 @@ struct Tabs {
     revealed: HashSet<String>,
     /// The tab that should hold keyboard focus once it's revealed.
     focus: Option<String>,
+    /// The zoom each tab's webview currently has.
+    zooms: HashMap<String, f64>,
 }
 
 #[derive(Clone, serde::Serialize)]
@@ -118,9 +132,9 @@ fn reveal(app: &AppHandle, id: &str) {
     let Some(webview) = main_window(app).and_then(|w| w.get_webview(&tab_label(id))) else {
         return;
     };
-    match tabs.visible.get(id) {
+    match tabs.visible.get(id).copied() {
         Some(place) => {
-            let _ = place.apply(&webview);
+            let _ = place.apply(&webview, &mut tabs.zooms, id);
             let _ = webview.show();
             if tabs.focus.as_deref() == Some(id) {
                 let _ = webview.set_focus();
@@ -162,7 +176,9 @@ async fn show_tabs(
         let label = tab_label(&view.id);
         if let Some(webview) = window.get_webview(&label) {
             if tabs.revealed.contains(&view.id) {
-                view.place.apply(&webview).map_err(|e| e.to_string())?;
+                view.place
+                    .apply(&webview, &mut tabs.zooms, &view.id)
+                    .map_err(|e| e.to_string())?;
                 webview.show().map_err(|e| e.to_string())?;
                 if focus.as_deref() == Some(view.id.as_str()) {
                     webview.set_focus().map_err(|e| e.to_string())?;
@@ -177,12 +193,26 @@ async fn show_tabs(
             .parse()
             .map_err(|e| format!("invalid url {}: {e}", view.url))?;
         let loaded_id = view.id.clone();
+        let opener = app.clone();
         let builder = WebviewBuilder::new(&label, WebviewUrl::External(parsed))
             .background_color(GROUND)
             .on_page_load(move |webview, payload| {
                 if payload.event() == PageLoadEvent::Finished {
                     reveal(webview.app_handle(), &loaded_id);
                 }
+            })
+            .on_new_window(move |url, features| {
+                // A sized popup is a sign-in flow (window.open with a size):
+                // keep it, it reports back to the page. A plain new-tab link
+                // goes to the default browser instead of a bare window.
+                if features.size().is_some() {
+                    return NewWindowResponse::Allow;
+                }
+                use tauri_plugin_opener::OpenerExt;
+                if matches!(url.scheme(), "http" | "https" | "mailto") {
+                    let _ = opener.opener().open_url(url.as_str(), None::<&str>);
+                }
+                NewWindowResponse::Deny
             });
         window
             .add_child(
@@ -196,6 +226,7 @@ async fn show_tabs(
                 Ok(webview)
             })
             .map_err(|e| e.to_string())?;
+        tabs.zooms.insert(view.id.clone(), view.place.zoom);
         let app = app.clone();
         let id = view.id;
         tauri::async_runtime::spawn(async move {
@@ -238,7 +269,10 @@ async fn set_tab_bounds(
         tabs.visible.insert(placement.id.clone(), placement.place);
         if tabs.revealed.contains(&placement.id) {
             if let Some(webview) = window.get_webview(&tab_label(&placement.id)) {
-                placement.place.apply(&webview).map_err(|e| e.to_string())?;
+                placement
+                    .place
+                    .apply(&webview, &mut tabs.zooms, &placement.id)
+                    .map_err(|e| e.to_string())?;
             }
         }
     }
@@ -254,6 +288,7 @@ async fn close_tab(window: Window, tabs: State<'_, Mutex<Tabs>>, id: String) -> 
     }
     tabs.revealed.remove(&id);
     tabs.visible.remove(&id);
+    tabs.zooms.remove(&id);
     Ok(())
 }
 

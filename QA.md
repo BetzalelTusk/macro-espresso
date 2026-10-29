@@ -11,15 +11,15 @@ never push. Sign-in work means the sign-in *page* works and persists, not signin
 
 ## Bugs reported by the user
 
-- [ ] **Divider drag is choppy.** Every pointermove sets React state, re-renders the
+- [x] **Divider drag is choppy.** Every pointermove sets React state, re-renders the
   app and fires ResizeObserver → IPC. Drive the drag with a CSS variable + rAF, commit
   the ratio on release; no IPC while tabs are hidden.
-- [ ] **WhatsApp and Spotify don't fit narrow panes / small windows** (Paperclip does).
+- [x] **WhatsApp and Spotify don't fit narrow panes / small windows** (Paperclip does).
   Find out why (likely the sites' minimum layout width). Fix so every tab fits its pane,
   e.g. per-tab minimum width and webview zoom below it. Verify at 3 pane widths.
-- [ ] **Spotify must work seamlessly**: loads, no glitches on tab switch, split,
+- [x] **Spotify must work seamlessly**: loads, no glitches on tab switch, split,
   resize, hide/show, reload; playback continues while the tab is hidden; DRM present.
-- [ ] **WhatsApp must work seamlessly**: same checks; stays connected while hidden;
+- [x] **WhatsApp must work seamlessly**: same checks; stays connected while hidden;
   session persists across app restarts (check storage survives).
 - [ ] **Paperclip sign-in works properly**: first-run onboarding reachable and usable;
   survives restart; restart/log menu actions work.
@@ -62,3 +62,13 @@ never push. Sign-in work means the sign-in *page* works and persists, not signin
 - Tab webviews appear as separate CDP targets; check `innerWidth`/`innerHeight`.
 
 ## Log
+
+- e1a71e1 Divider drag: CSS variables per animation frame, ratio committed on release,
+  no IPC while hidden. Simulated drag: 60 fps (avg 17 ms, p95 17 ms frames).
+- 7deaace Fit: Spotify (body min-width 800) and WhatsApp (container 748) were clipped.
+  Tabs declare `minWidth`; the webview zooms (≥0.4) below it. At a 304px pane no tab
+  overflows; Macro, T3 Code and Paperclip are responsive and need no zoom.
+- Spotify/WhatsApp hardening: zoom only re-sent when it changes (no re-layout flicker on
+  resize/switch); new-window links open in the default browser, sized popups (sign-in) stay
+  in-app. Verified: 8 tab switches without reload; hidden tabs keep running timers at full
+  rate (connection/playback continue); both stayed signed in across ~20 restarts; DRM present.
