@@ -10,6 +10,13 @@ type Props = {
   onClose: (pane: number) => void;
   onSwap: () => void;
   onRatio: (ratio: number) => void;
+  /**
+   * A drag on the divider starts/ends. Tab webviews are native layers above
+   * this UI, so the mouse would stop reporting the moment it crossed onto
+   * one; the caller hides them for the drag (a drag shield).
+   */
+  onDragStart: () => Promise<void>;
+  onDragEnd: () => void;
   /** What a pane shows while its tab isn't on screen. */
   renderMessage: (id: string) => ReactNode;
 };
@@ -21,7 +28,17 @@ const RATIO_STEP = 0.05;
  * body. The headers and the divider sit outside the bodies: webviews draw
  * above the shell's UI, so anything clickable must be where no webview is.
  */
-export function Panes({ layout, bodies, onFocus, onClose, onSwap, onRatio, renderMessage }: Props) {
+export function Panes({
+  layout,
+  bodies,
+  onFocus,
+  onClose,
+  onSwap,
+  onRatio,
+  onDragStart,
+  onDragEnd,
+  renderMessage,
+}: Props) {
   const container = useRef<HTMLDivElement>(null);
   const split = layout.panes.length > 1;
   const style = { "--split-left": `${layout.ratio}fr`, "--split-right": `${1 - layout.ratio}fr` };
@@ -50,19 +67,30 @@ export function Panes({ layout, bodies, onFocus, onClose, onSwap, onRatio, rende
                 }}
                 onPointerDown={(e) => {
                   const box = container.current?.getBoundingClientRect();
-                  if (!box) return;
-                  const target = e.currentTarget;
-                  target.setPointerCapture(e.pointerId);
+                  if (!box || e.button !== 0) return;
+                  e.preventDefault();
+                  // Pointer capture doesn't hold inside this embedded webview,
+                  // so follow the mouse on the whole window. The drag shield
+                  // (onDragStart) takes the tab webviews out of its way.
+                  void onDragStart();
                   const move = (ev: PointerEvent) => {
                     const ratio = (ev.clientX - box.left) / box.width;
                     onRatio(Math.min(MAX_RATIO, Math.max(MIN_RATIO, ratio)));
                   };
-                  const up = () => {
-                    target.removeEventListener("pointermove", move);
-                    target.removeEventListener("pointerup", up);
+                  let ended = false;
+                  const end = () => {
+                    if (ended) return;
+                    ended = true;
+                    window.removeEventListener("pointermove", move);
+                    window.removeEventListener("pointerup", end);
+                    window.removeEventListener("pointercancel", end);
+                    onDragEnd();
                   };
-                  target.addEventListener("pointermove", move);
-                  target.addEventListener("pointerup", up);
+                  // Not `blur`: the drag shield moves focus to this webview,
+                  // which fires a blur that would end the drag at once.
+                  window.addEventListener("pointermove", move);
+                  window.addEventListener("pointerup", end);
+                  window.addEventListener("pointercancel", end);
                 }}
               />
             )}

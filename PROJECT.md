@@ -48,6 +48,7 @@ Icons: `lucide-react` only, `strokeWidth` 1.6–1.8, sizes 14/16/18/20.
 | UI drawn over the content area while a tab is showing | Hide tabs first (`hide_tabs`), as the palette does | Tab webviews sit above the UI webview; anything drawn there is invisible |
 | CSS tooltips or menus that extend from the rail into the stage | `title` for tooltips; native `Menu` for menus | Same reason: they'd render under the tab |
 | Clickable UI inside a `.pane-body` (or on its edge) | Pane headers, the divider's own grid column (`--divider-width`) | Webviews cover pane bodies completely |
+| Drags that rely on `setPointerCapture` or end on `blur` | Hide tabs for the drag (`hideAll`), track `pointermove`/`pointerup` on `window` | Capture doesn't hold in this webview; hiding tabs moves focus and fires `blur` |
 | Brighter-than-field blobs, saturated aurora | Darker smoke tinted by hue | The reference reads as smoke over graphite, not coloured light |
 | Animating `filter`, size or position of blobs | `transform` only | Blur on large layers is costly; transform stays on the compositor |
 | Animation running under a visible tab | `Ambient paused` when the active tab is ready | Invisible work still costs GPU |

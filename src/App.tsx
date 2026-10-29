@@ -250,6 +250,8 @@ function App() {
           onClose={(pane) => change((l) => closePane(l, pane))}
           onSwap={() => change(swap)}
           onRatio={(ratio) => update((l) => ({ ...l, ratio }))}
+          onDragStart={hideAll}
+          onDragEnd={reshow}
           renderMessage={(id) =>
             paletteOpen ? null : (
               <StageMessage tab={tabById(id)} status={paneStatus(id)} onRetry={() => void reload(tabById(id))} />
