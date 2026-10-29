@@ -90,4 +90,5 @@ body,
   border-radius: 8px;
   background: #3a1416;
   color: #ffb4b4;
+  white-space: pre-wrap;
 }

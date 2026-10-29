@@ -13,19 +13,40 @@ function measure(el: HTMLElement): Bounds {
 function App() {
   const [active, setActive] = useState<Tab>(TABS[0]);
   const [error, setError] = useState<string | null>(null);
+  const [starting, setStarting] = useState<string | null>(null);
   const content = useRef<HTMLElement>(null);
+  // The most recent click wins if a slow tool start finishes after another click.
+  const latest = useRef<string>("");
 
   const show = useCallback(async (tab: Tab) => {
+    latest.current = tab.id;
     setActive(tab);
     setError(null);
+    setStarting(null);
     if (!content.current) return;
     try {
-      if (tab.kind === "web") {
-        await invoke("open_tab", { id: tab.id, url: tab.url, bounds: measure(content.current) });
-      } else {
+      if (tab.kind === "native") {
         await invoke("hide_tabs");
+        return;
       }
+      let url = tab.url;
+      if (tab.kind === "local") {
+        await invoke("hide_tabs");
+        setStarting(tab.name);
+        // A fresh start may hand back a one-time sign-in URL (T3 Code pairing).
+        const pairing = await invoke<string | null>("ensure_service", { id: tab.service });
+        if (latest.current !== tab.id) return;
+        setStarting(null);
+        if (pairing) {
+          // Drop the old webview so the tab opens through the new sign-in URL.
+          await invoke("close_tab", { id: tab.id });
+          url = pairing;
+        }
+      }
+      await invoke("open_tab", { id: tab.id, url, bounds: measure(content.current) });
     } catch (e) {
+      if (latest.current !== tab.id) return;
+      setStarting(null);
       setError(String(e));
     }
   }, []);
@@ -62,6 +83,11 @@ function App() {
       </nav>
       <main className="content" ref={content}>
         {error && <p className="error">{error}</p>}
+        {starting && (
+          <div className="placeholder">
+            <p>Starting {starting}…</p>
+          </div>
+        )}
         {active.kind === "native" && (
           <div className="placeholder">
             <h1>{active.name}</h1>

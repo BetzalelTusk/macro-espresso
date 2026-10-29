@@ -1,3 +1,5 @@
+mod services;
+
 use std::sync::Mutex;
 
 use tauri::{
@@ -129,6 +131,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .manage(Mutex::new(Tabs::default()))
+        .manage(services::Services::default())
         .setup(|app| {
             let width = 1280.0;
             let height = 800.0;
@@ -150,8 +153,14 @@ pub fn run() {
             open_tab,
             hide_tabs,
             set_tab_bounds,
-            close_tab
+            close_tab,
+            services::ensure_service
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app, event| {
+            if let tauri::RunEvent::Exit = event {
+                services::stop_all(&app.state::<services::Services>());
+            }
+        });
 }
