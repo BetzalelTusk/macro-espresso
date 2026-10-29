@@ -38,7 +38,7 @@ never push. Sign-in work means the sign-in *page* works and persists, not signin
 
 - [ ] Window title bar matches the dark theme on Windows (or custom title bar).
 - [ ] Rail tooltips feel native (title attr is slow and plain).
-- [ ] Notifications from web tabs (WhatsApp) reach Windows while the shell runs.
+- [x] Notifications from web tabs (WhatsApp) reach Windows while the shell runs.
 - [ ] Tab memory: reopening restores each tab's page, not only the layout.
 - [ ] Review every screen against PROJECT.md and the anti-slop audit; fix findings.
 - [ ] Re-run the full regression (below) after all fixes.
@@ -86,3 +86,7 @@ never push. Sign-in work means the sign-in *page* works and persists, not signin
   60 fps with 38 rows in the DOM; access-denied shows a clear message; narrow panes drop
   places then dates (fixed a container-query bug that left the list 196px wide). Google Drive
   still needs the user's own Google OAuth app.
+- Notifications: WebView2 had stored "denied" for every tab (it denies requests the host
+  doesn't answer). Each tab's origin is now set to allow notifications in its profile and later
+  requests are answered allow (other permissions unchanged). WhatsApp: denied -> granted.
+  Not shown a real toast overnight; the user should confirm one arrives.

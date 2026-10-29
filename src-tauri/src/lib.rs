@@ -117,6 +117,51 @@ fn tab_label(id: &str) -> String {
     format!("{TAB_PREFIX}{id}")
 }
 
+/// Let a tab show notifications. WebView2 denies permission requests the host
+/// doesn't answer, and stores that "deny" in the profile, so WhatsApp and the
+/// others could never notify. The tab's origin is set to "allow" in the
+/// profile, and later requests are answered "allow". Only the notification
+/// permission is granted; camera, mic and the rest keep the default behaviour.
+#[cfg(windows)]
+fn allow_notifications<R: tauri::Runtime>(webview: &tauri::Webview<R>, origin: String) {
+    let _ = webview.with_webview(move |platform| unsafe {
+        use webview2_com::{
+            Microsoft::Web::WebView2::Win32::*, PermissionRequestedEventHandler,
+            SetPermissionStateCompletedHandler,
+        };
+        use windows_core::{HSTRING, Interface};
+        let Ok(core) = platform.controller().CoreWebView2() else {
+            return;
+        };
+        let set_profile = || -> windows_core::Result<()> {
+            let profile: ICoreWebView2Profile4 = core.cast::<ICoreWebView2_13>()?.Profile()?.cast()?;
+            profile.SetPermissionState(
+                COREWEBVIEW2_PERMISSION_KIND_NOTIFICATIONS,
+                &HSTRING::from(origin.as_str()),
+                COREWEBVIEW2_PERMISSION_STATE_ALLOW,
+                &SetPermissionStateCompletedHandler::create(Box::new(|_| Ok(()))),
+            )
+        };
+        let _ = set_profile();
+        let handler = PermissionRequestedEventHandler::create(Box::new(|_, args| {
+            let Some(args) = args else {
+                return Ok(());
+            };
+            let mut kind = COREWEBVIEW2_PERMISSION_KIND::default();
+            args.PermissionKind(&mut kind)?;
+            if kind == COREWEBVIEW2_PERMISSION_KIND_NOTIFICATIONS {
+                args.SetState(COREWEBVIEW2_PERMISSION_STATE_ALLOW)?;
+            }
+            Ok(())
+        }));
+        let mut token = Default::default();
+        let _ = core.add_PermissionRequested(&handler, &mut token);
+    });
+}
+
+#[cfg(not(windows))]
+fn allow_notifications<R: tauri::Runtime>(_webview: &tauri::Webview<R>, _origin: String) {}
+
 fn main_window(app: &AppHandle) -> Option<Window> {
     app.get_window("main")
 }
@@ -189,10 +234,11 @@ async fn show_tabs(
             continue;
         }
 
-        let parsed = view
+        let parsed: tauri::Url = view
             .url
             .parse()
             .map_err(|e| format!("invalid url {}: {e}", view.url))?;
+        let origin = parsed.origin().ascii_serialization();
         let loaded_id = view.id.clone();
         let opener = app.clone();
         let builder = WebviewBuilder::new(&label, WebviewUrl::External(parsed))
@@ -224,6 +270,7 @@ async fn show_tabs(
             .and_then(|webview| {
                 // Zoom before the first load so the page lays out at its size.
                 webview.set_zoom(view.place.zoom)?;
+                allow_notifications(&webview, origin);
                 Ok(webview)
             })
             .map_err(|e| e.to_string())?;
