@@ -152,3 +152,6 @@ never push. Sign-in work means the sign-in *page* works and persists, not signin
   tab loads hidden. Cold launch with only WhatsApp open: Spotify and Macro ready at 5s, T3
   paired at 14s, Paperclip at 36s; opening each afterwards takes 7-13 ms. Opening T3 and
   Paperclip mid warm-up shares the one start (1 T3 server, still paired). Regression 17/17.
+- Links in tabs: tauri-plugin-opener's click script ran in tab webviews (no app access), so target=_blank links did nothing; turned off, links reach on_new_window and open in the default browser (verified in Paperclip: both link kinds open in Brave).
+- Paperclip speed: runs on native ARM64 Node (embedded PostgreSQL stays x64, emulated; patch in tools/patch-paperclip.mjs, ARM64 sharp/heif2jpeg added). Ready in ~17-23s instead of ~55s; warm-up requests 5-30 ms instead of 300-650 ms. Node compile cache on; npm update check off. Remaining time is loading ~thousands of JS files (likely antivirus scanning).
+- Opening a tool tab that is still starting now swaps the screen at once (old tab hidden, pane says Starting) instead of leaving the previous tab under the new header. Tab resizes are time-stamped so a late, older size can't undo a newer one. Regression 17/17.

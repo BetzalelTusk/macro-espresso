@@ -187,6 +187,8 @@ struct Tabs {
     focus: Option<String>,
     /// The zoom each tab's webview currently has.
     zooms: HashMap<String, f64>,
+    /// The newest `set_tab_bounds` call applied so far.
+    bounds_seq: u64,
 }
 
 #[derive(Clone, serde::Serialize)]
@@ -408,14 +410,21 @@ async fn hide_tabs(window: Window, tabs: State<'_, Mutex<Tabs>>) -> Result<(), S
     Ok(())
 }
 
-/// Move the on-screen tabs when the panes change size.
+/// Move the on-screen tabs when the panes change size. `seq` is when the UI
+/// measured (a rising clock): async commands can run out of order, and a
+/// late, older size must not undo a newer one.
 #[tauri::command]
 async fn set_tab_bounds(
     window: Window,
     tabs: State<'_, Mutex<Tabs>>,
     placements: Vec<Placement>,
+    seq: u64,
 ) -> Result<(), String> {
     let mut tabs = tabs.lock().map_err(|e| e.to_string())?;
+    if seq < tabs.bounds_seq {
+        return Ok(());
+    }
+    tabs.bounds_seq = seq;
     for placement in placements {
         if !tabs.visible.contains_key(&placement.id) {
             continue;
@@ -506,7 +515,10 @@ pub fn run() {
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             show_main(app);
         }))
-        .plugin(tauri_plugin_opener::init())
+        // No click-interception script: it would run in tab webviews, which have
+        // no app access, so target=_blank links did nothing. Those links reach
+        // `on_new_window` instead, which opens them in the default browser.
+        .plugin(tauri_plugin_opener::Builder::new().open_js_links_on_click(false).build())
         // "Open when you sign in to Windows" (Settings): launches with
         // --hidden, straight into the tray.
         .plugin(tauri_plugin_autostart::init(

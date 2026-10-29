@@ -41,6 +41,8 @@ struct Spec {
     /// replaced with a fresh start. A T3 Code the user runs another way has
     /// other arguments and is left alone.
     owned_by_args: bool,
+    /// Extra environment for the tool's process.
+    env: Vec<(&'static str, String)>,
 }
 
 impl Spec {
@@ -90,13 +92,26 @@ fn spec(id: &str) -> Result<Spec, String> {
             owned_dir: None,
             shutdown: None,
             owned_by_args: true,
+            env: Vec::new(),
         }),
-        // Paperclip runs on x64 Node: its embedded PostgreSQL has no ARM64
-        // Windows build, and x64 runs under Windows' emulation.
+        // Paperclip runs on the system's native Node (ARM64 here), about three
+        // times faster to start than emulated x64. Its embedded PostgreSQL has
+        // no ARM64 Windows build, so shell/tools/patch-paperclip.mjs points it
+        // at the x64 one, which Windows emulates. Without a system Node, or
+        // before the ARM64 image library is installed, the bundled x64 Node
+        // runs everything.
         "paperclip" => {
             let tools = env_path("LOCALAPPDATA")?.join("shell-tools");
+            let native = env_path("ProgramFiles")?.join("nodejs").join("node.exe");
+            let arm64_ready = tools
+                .join("paperclip/node_modules/@img/sharp-win32-arm64")
+                .exists();
             Ok(Spec {
-                program: tools.join("node-x64").join("node.exe"),
+                program: if native.exists() && arm64_ready {
+                    native
+                } else {
+                    tools.join("node-x64").join("node.exe")
+                },
                 args: vec![
                     tools
                         .join("paperclip/node_modules/paperclipai/dist/index.js")
@@ -127,6 +142,17 @@ fn spec(id: &str) -> Result<Spec, String> {
                 )),
                 owned_dir: Some(tools.join("paperclip")),
                 owned_by_args: false,
+                env: vec![
+                    // Most of Paperclip's start is loading thousands of JS
+                    // files; Node's on-disk compile cache cuts that on every
+                    // start after the first.
+                    (
+                        "NODE_COMPILE_CACHE",
+                        tools.join("node-compile-cache").to_string_lossy().into_owned(),
+                    ),
+                    // Skip the npm registry lookup at start (up to 2.5s offline).
+                    ("PAPERCLIP_UPDATE_CHECK", "0".into()),
+                ],
                 cwd: home,
             })
         }
@@ -272,6 +298,7 @@ fn spawn(spec: &Spec, log: &Path) -> Result<Child, String> {
     command
         .args(&spec.args)
         .current_dir(&spec.cwd)
+        .envs(spec.env.iter().map(|(key, value)| (*key, value.as_str())))
         .stdin(Stdio::null())
         .stdout(out)
         .stderr(err);

@@ -133,6 +133,26 @@ export function useLayout({ visibleIds, warmUp }: { visibleIds: string[]; warmUp
         if (tab.kind === "native") setStatus(tab.id, { state: "ready" });
       }
 
+      // The panes' webviews, measured now. `urls` overrides a tab's own URL.
+      const viewsFor = (include: (tab: Tab) => boolean) =>
+        next.panes.flatMap((id, i) => {
+          const tab = tabById(id);
+          const el = bodies.current[i];
+          if (tab.kind === "native" || !el || !include(tab)) return [];
+          if (statusesRef.current[id]?.state === "error") return [];
+          const bounds = measure(el);
+          return [{ id, url: urls[id] ?? tab.url, bounds, zoom: fitZoom(tab, bounds.width) }];
+        });
+
+      // A tool still starting would leave the previous tab on screen under the
+      // new pane's header until it's up. Swap the screen over right away: show
+      // what's ready, hide the rest; the starting pane shows its message.
+      const ready = (tab: Tab) => tab.kind !== "local" || statusesRef.current[tab.id]?.state === "ready";
+      if (!tabs.every(ready)) {
+        await invoke("show_tabs", { views: viewsFor(ready), focus: next.panes[next.focused] }).catch(() => {});
+        if (mine !== generation.current) return;
+      }
+
       // Start local tools first; a fresh start may hand back a sign-in URL.
       await Promise.all(
         tabs.map(async (tab) => {
@@ -170,14 +190,7 @@ export function useLayout({ visibleIds, warmUp }: { visibleIds: string[]; warmUp
         urls[tab.id] = pairing;
       }
 
-      const views = next.panes.flatMap((id, i) => {
-        const tab = tabById(id);
-        const el = bodies.current[i];
-        if (tab.kind === "native" || !el) return [];
-        if (statusesRef.current[id]?.state === "error") return [];
-        const bounds = measure(el);
-        return [{ id, url: urls[id] ?? tab.url, bounds, zoom: fitZoom(tab, bounds.width) }];
-      });
+      const views = viewsFor(() => true);
       try {
         const showing = await invoke<string[]>("show_tabs", {
           views,
@@ -277,7 +290,10 @@ export function useLayout({ visibleIds, warmUp }: { visibleIds: string[]; warmUp
     const observer = new ResizeObserver(() => {
       // Hidden tabs (palette, divider drag) get their bounds when re-shown.
       if (hiddenRef.current) return;
-      void invoke("set_tab_bounds", { placements: placements() });
+      // Stamped in microseconds, so Rust can drop a stale size that arrives
+      // after a newer one. A clock (not a counter) keeps rising across reloads.
+      const seq = Math.floor((performance.timeOrigin + performance.now()) * 1000);
+      void invoke("set_tab_bounds", { placements: placements(), seq });
     });
     for (const el of bodies.current.slice(0, layout.panes.length)) {
       if (el) observer.observe(el);
