@@ -4,7 +4,8 @@
 // 1. Claude subscription sign-in: Paperclip runs `claude setup-token` through a
 //    Python `pty` bridge that only exists on Linux/macOS. On Windows it uses
 //    pty_bridge.py (ConPTY via pywinpty) from %LOCALAPPDATA%\shell-tools\pty-bridge.
-// 2. A 15-minute sign-in window instead of 5.
+// 2. A 15-minute sign-in window instead of 5, and the saved login readable on
+//    Windows (its checks wanted a Unix owner and mode 600).
 // 3. Native ARM64 Node: embedded-postgres has no Windows ARM64 build and refuses
 //    to start there. Its x64 PostgreSQL runs fine under Windows' emulation, so
 //    ARM64 uses it; the server itself then runs natively (much faster).
@@ -36,6 +37,36 @@ const patches = [
     find: "timeoutMs: 300_000, signal: controller.signal,",
     replace: `timeoutMs: 900_000 ${MARK} 15 minute sign-in window */, signal: controller.signal,`,
     all: true,
+  },
+  {
+    // The saved login must be owned by this Unix uid with mode 600. Windows has
+    // neither (no getuid; modes read as 666), so every login was refused with
+    // "Could not verify the local subscription". On Windows the user profile's
+    // ACLs protect the file; keep the file-type and size checks.
+    name: "credential file checks on windows",
+    file: path.join(modules, "paperclipai/node_modules/@paperclipai/server/dist/services/local-ai-credential-file.js"),
+    find: "if (!stat.isFile() || stat.uid !== process.getuid?.() || (stat.mode & 0o777) !== 0o600 || stat.size > MAX_CREDENTIAL_BYTES) {",
+    replace: `${MARK} credential file checks on windows */
+        const unixOwnerAndMode = process.platform === "win32" || (stat.uid === process.getuid?.() && (stat.mode & 0o777) === 0o600);
+        if (!stat.isFile() || !unixOwnerAndMode || stat.size > MAX_CREDENTIAL_BYTES) {`,
+  },
+  {
+    // Its "confined open" exists only for Linux and macOS and refuses
+    // everywhere else, so the saved login could never be read on Windows.
+    // Windows: refuse a symlink or junction (what confinement guards against),
+    // then open the file itself.
+    name: "credential file open on windows",
+    file: path.join(modules, "paperclipai/node_modules/@paperclipai/server/dist/services/local-ai-credential-file.js"),
+    find: "    const file = await openRunnerApiWorkspaceFile(filename);",
+    replace: `    ${MARK} credential file open on windows */
+    const file = process.platform === "win32"
+        ? await (async () => {
+            const { lstat, open } = await import("node:fs/promises");
+            if ((await lstat(filename)).isSymbolicLink())
+                throw new Error("Invalid credential file");
+            return open(filename, "r");
+        })()
+        : await openRunnerApiWorkspaceFile(filename);`,
   },
   {
     name: "postgres on windows arm64",
