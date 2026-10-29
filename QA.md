@@ -21,9 +21,9 @@ never push. Sign-in work means the sign-in *page* works and persists, not signin
   resize, hide/show, reload; playback continues while the tab is hidden; DRM present.
 - [x] **WhatsApp must work seamlessly**: same checks; stays connected while hidden;
   session persists across app restarts (check storage survives).
-- [ ] **Paperclip sign-in works properly**: first-run onboarding reachable and usable;
+- [x] **Paperclip sign-in works properly**: first-run onboarding reachable and usable;
   survives restart; restart/log menu actions work.
-- [ ] **T3 Code sign-in works properly**: pairing is automatic on every fresh start
+- [x] **T3 Code sign-in works properly**: pairing is automatic on every fresh start
   (no "Still connecting"), stays paired across restarts; provider settings reachable.
 
 ## To build
@@ -72,3 +72,10 @@ never push. Sign-in work means the sign-in *page* works and persists, not signin
   resize/switch); new-window links open in the default browser, sized popups (sign-in) stay
   in-app. Verified: 8 tab switches without reload; hidden tabs keep running timers at full
   rate (connection/playback continue); both stayed signed in across ~20 restarts; DRM present.
+- Tool orphans (left by a crash or force-quit) broke sign-in and cleanup. T3 Code: an orphan
+  with the shell's own arguments is replaced, so a fresh pairing URL exists; 3/3 fresh starts
+  (one with an orphan running) landed paired in T3's main screen in 12-14s. Paperclip: orphans
+  are adopted and stopped on quit; leftover matching now normalises mixed slashes (Paperclip's
+  node command line was never matched before). Verified: dashboard after clean start (24s)
+  and after palette Restart (21s, self-reconnects); quit leaves 0 postgres; no sign-in needed
+  (trusted local mode). Test harness: scratchpad harness.mjs, t3-test.mjs, paperclip-test.mjs.

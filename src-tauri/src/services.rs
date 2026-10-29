@@ -33,6 +33,28 @@ struct Spec {
     /// A program that shuts the tool's helpers down cleanly, run before a
     /// start and on quit, ahead of any force-stop.
     shutdown: Option<(PathBuf, Vec<String>)>,
+    /// Treat a running process with exactly these arguments as this shell's
+    /// own (an orphan after a crash or force-quit) and stop it. Without its
+    /// startup log the tab can't be signed in (T3 Code pairing), so it's
+    /// replaced with a fresh start. A T3 Code the user runs another way has
+    /// other arguments and is left alone.
+    owned_by_args: bool,
+}
+
+impl Spec {
+    /// Command-line fragments that mark a process as this tool's leftover.
+    /// Backslash-separated: command lines are compared with `/` turned into
+    /// `\`, since tools mix them (`...\paperclip/node_modules/...`).
+    fn leftover_markers(&self) -> Vec<String> {
+        let mut markers = Vec::new();
+        if let Some(dir) = &self.owned_dir {
+            markers.push(format!("{}\\", dir.to_string_lossy().replace('/', "\\")));
+        }
+        if self.owned_by_args {
+            markers.push(self.args.join(" "));
+        }
+        markers
+    }
 }
 
 fn env_path(var: &str) -> Result<PathBuf, String> {
@@ -65,6 +87,7 @@ fn spec(id: &str) -> Result<Spec, String> {
             pairing_prefix: Some("Pairing URL: "),
             owned_dir: None,
             shutdown: None,
+            owned_by_args: true,
         }),
         // Paperclip runs on x64 Node: its embedded PostgreSQL has no ARM64
         // Windows build, and x64 runs under Windows' emulation.
@@ -101,6 +124,7 @@ fn spec(id: &str) -> Result<Spec, String> {
                     ],
                 )),
                 owned_dir: Some(tools.join("paperclip")),
+                owned_by_args: false,
                 cwd: home,
             })
         }
@@ -162,24 +186,27 @@ fn http_ready(port: u16) -> bool {
         .is_some_and(|code| code < 500)
 }
 
-/// Stop every process started from a program under `dir`.
+/// Stop every process whose command line contains one of `markers`.
 ///
 /// PostgreSQL runs under a restricted token, which hides its program path from
 /// ordinary process queries, and an orphaned worker survives `pg_ctl stop`
 /// while holding the database's shared memory. WMI still reports the command
-/// line, so match on that, in either slash style.
+/// line, so match on that.
 #[cfg(windows)]
-fn kill_processes_under(dir: &Path) {
+fn kill_processes_matching(markers: &[String]) {
     use std::os::windows::process::CommandExt;
     const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-    let back = dir.to_string_lossy().replace('/', "\\");
-    let forward = back.replace('\\', "/");
+    if markers.is_empty() {
+        return;
+    }
     // Single quotes inside a PowerShell single-quoted string are doubled.
-    let quote = |s: &str| format!("'{}'", s.replace('\'', "''"));
+    let quoted: Vec<String> = markers
+        .iter()
+        .map(|m| format!("'{}'", m.replace('\'', "''")))
+        .collect();
     let script = format!(
-        "$dirs = @({}, {}); Get-CimInstance Win32_Process | Where-Object {{ $c = $_.CommandLine; $c -and ($dirs | Where-Object {{ $c.IndexOf($_, [StringComparison]::OrdinalIgnoreCase) -ge 0 }}) }} | ForEach-Object {{ Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }}",
-        quote(&format!("{back}\\")),
-        quote(&format!("{forward}/")),
+        "$marks = @({}); Get-CimInstance Win32_Process | Where-Object {{ $c = $_.CommandLine; $c -and ($c = $c.Replace('/', '\\')) -and ($marks | Where-Object {{ $c.IndexOf($_, [StringComparison]::OrdinalIgnoreCase) -ge 0 }}) }} | ForEach-Object {{ Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }}",
+        quoted.join(", "),
     );
     let _ = Command::new("powershell")
         .args(["-NoProfile", "-NonInteractive", "-Command", &script])
@@ -191,7 +218,7 @@ fn kill_processes_under(dir: &Path) {
 }
 
 #[cfg(not(windows))]
-fn kill_processes_under(_dir: &Path) {}
+fn kill_processes_matching(_markers: &[String]) {}
 
 fn last_lines(path: &Path, count: usize) -> String {
     let Ok(file) = File::open(path) else {
@@ -248,8 +275,42 @@ pub async fn ensure_service(
         let mut started = services.0.lock().map_err(|e| e.to_string())?;
         Ok(started.get_mut(&id).and_then(|s| s.pairing_url.take()))
     };
+    let ours = services
+        .0
+        .lock()
+        .map_err(|e| e.to_string())?
+        .get(&id)
+        .is_some_and(|s| s.child.is_some());
     if http_ready(spec.port) {
-        return take_pairing();
+        if ours {
+            return take_pairing();
+        }
+        if !spec.owned_by_args {
+            // An orphan from a crash or force-quit that needs no sign-in
+            // (Paperclip): adopt it, so quitting the shell still stops it.
+            if !spec.leftover_markers().is_empty() {
+                services
+                    .0
+                    .lock()
+                    .map_err(|e| e.to_string())?
+                    .entry(id.clone())
+                    .or_default();
+            }
+            return Ok(None);
+        }
+        // Running, but not started by this run of the shell: an orphan from a
+        // crash or force-quit, whose sign-in URL we never saw. Replace it.
+        clean_up_leftovers(&spec);
+        for _ in 0..20 {
+            if !port_open(spec.port) {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(250)).await;
+        }
+        if port_open(spec.port) {
+            // Something else holds the port (not ours to stop); use it as is.
+            return Ok(None);
+        }
     }
     if !spec.program.exists() {
         return Err(format!(
@@ -361,9 +422,7 @@ fn clean_up_leftovers(spec: &Spec) {
             let _ = command.status();
         }
     }
-    if let Some(dir) = &spec.owned_dir {
-        kill_processes_under(dir);
-    }
+    kill_processes_matching(&spec.leftover_markers());
 }
 
 /// Kill a tool's process and everything it spawned.
