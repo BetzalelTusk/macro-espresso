@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { LucideIcon } from "lucide-react";
+import type { TabIcon } from "../brand-icons";
 import "./palette.css";
 
 export type PaletteCommand = {
   id: string;
   label: string;
-  icon: LucideIcon;
+  icon: TabIcon;
   hint?: string;
   run: () => void;
 };

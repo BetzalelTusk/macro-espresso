@@ -1,17 +1,10 @@
-import {
-  Disc3,
-  FolderClosed,
-  LayoutGrid,
-  type LucideIcon,
-  MessageCircle,
-  Paperclip,
-  SquareTerminal,
-} from "lucide-react";
+import { Disc3, FolderClosed, LayoutGrid, Settings } from "lucide-react";
+import { PaperclipIcon, T3Icon, type TabIcon, WhatsAppIcon } from "./brand-icons";
 
 type Common = {
   id: string;
   name: string;
-  icon: LucideIcon;
+  icon: TabIcon;
   /**
    * The narrowest layout the site supports, in CSS px (its `min-width`). In a
    * narrower pane the shell zooms the page out to fit instead of clipping it.
@@ -25,13 +18,16 @@ export type Tab =
   | (Common & { kind: "local"; service: string; url: string })
   | (Common & { kind: "native" });
 
-/** The rail's tabs, top to bottom. Ctrl+1..9 follow this order. */
+/**
+ * Every tab, in built-in order. The person's order and which ones show live in
+ * Settings (settings.ts: `visibleTabs`).
+ */
 export const TABS: Tab[] = [
   { id: "macro", name: "Macro", icon: LayoutGrid, kind: "web", url: "https://macro.com/app" },
   {
     id: "whatsapp",
     name: "WhatsApp",
-    icon: MessageCircle,
+    icon: WhatsAppIcon,
     kind: "web",
     url: "https://web.whatsapp.com",
     // Its app container has min-width: 748px and scrolls sideways below that.
@@ -49,7 +45,7 @@ export const TABS: Tab[] = [
   {
     id: "t3",
     name: "T3 Code",
-    icon: SquareTerminal,
+    icon: T3Icon,
     kind: "local",
     service: "t3",
     url: "http://127.0.0.1:3773",
@@ -57,13 +53,16 @@ export const TABS: Tab[] = [
   {
     id: "paperclip",
     name: "Paperclip",
-    icon: Paperclip,
+    icon: PaperclipIcon,
     kind: "local",
     service: "paperclip",
     url: "http://127.0.0.1:3100",
   },
   { id: "files", name: "Files", icon: FolderClosed, kind: "native" },
 ];
+
+/** The Settings tab: native, always available, pinned at the rail's foot. */
+export const SETTINGS_TAB: Tab = { id: "settings", name: "Settings", icon: Settings, kind: "native" };
 
 /** Where a tab is in its life. Native tabs are always "ready". */
 export type TabStatus =

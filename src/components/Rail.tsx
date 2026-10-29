@@ -4,6 +4,8 @@ import "./rail.css";
 
 type Props = {
   tabs: Tab[];
+  /** Pinned at the foot of the rail, outside the numbered tabs. */
+  settingsTab: Tab;
   /** The focused pane's tab: gets the accent marker. */
   activeId: string;
   /** Every tab on screen (two in a split). */
@@ -42,7 +44,9 @@ function statusLabel(status: TabStatus | undefined): string {
   }
 }
 
-export function Rail({ tabs, activeId, shownIds, statuses, onSelect, onMenu, onPalette }: Props) {
+export function Rail({ tabs, settingsTab, activeId, shownIds, statuses, onSelect, onMenu, onPalette }: Props) {
+  const SettingsIcon = settingsTab.icon;
+  const settingsActive = settingsTab.id === activeId;
   return (
     <nav className="rail" aria-label="Tabs">
       <div className="rail-mark" aria-hidden="true" />
@@ -76,7 +80,18 @@ export function Rail({ tabs, activeId, shownIds, statuses, onSelect, onMenu, onP
       </ul>
       <button
         type="button"
-        className="rail-tab rail-palette"
+        className="rail-tab rail-settings"
+        aria-current={settingsActive ? "page" : undefined}
+        data-shown={(!settingsActive && shownIds.includes(settingsTab.id)) || undefined}
+        aria-label={settingsTab.name}
+        title={settingsTab.name}
+        onClick={() => onSelect(settingsTab)}
+      >
+        <SettingsIcon size={18} strokeWidth={1.6} aria-hidden="true" />
+      </button>
+      <button
+        type="button"
+        className="rail-tab"
         aria-label="Command palette"
         title="Command palette  ·  Ctrl+K"
         onClick={onPalette}

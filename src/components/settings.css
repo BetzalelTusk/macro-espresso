@@ -1,0 +1,218 @@
+/*
+ * Settings: one quiet column of grouped rows, like a system preferences page.
+ * Labels carry the meaning; switches and order buttons sit at the row's end.
+ */
+.settings-frame {
+  position: absolute;
+  inset: 0;
+  overflow-y: auto;
+  background: var(--ground-2);
+}
+
+.settings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  max-width: 640px;
+  margin-inline: auto;
+  padding: var(--space-6) var(--space-4) calc(var(--space-6) * 2);
+}
+
+.settings-header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.settings-title {
+  margin: 0;
+  font: var(--text-title);
+  font-size: 20px;
+  color: var(--ink-1);
+}
+
+.settings-lede,
+.settings-note {
+  margin: 0;
+  color: var(--ink-3);
+}
+
+.settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.settings-heading {
+  margin: 0;
+  font: var(--text-label);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.settings-list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-panel);
+  background: var(--ground-1);
+  overflow: hidden;
+}
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 52px;
+  padding: var(--space-2) var(--space-4);
+}
+
+.settings-row + .settings-row,
+.settings-row + .settings-error,
+.settings-error + .settings-row {
+  border-block-start: 1px solid var(--line);
+}
+
+.settings-toggle {
+  cursor: pointer;
+  transition: background-color var(--t-micro) var(--ease-out);
+}
+
+.settings-toggle:hover:not([data-disabled]) {
+  background: var(--ground-3);
+}
+
+.settings-toggle[data-disabled] {
+  cursor: default;
+}
+
+.settings-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.settings-label {
+  color: var(--ink-1);
+}
+
+.settings-detail {
+  color: var(--ink-3);
+}
+
+.settings-tab[data-hidden] .settings-label,
+.settings-tab[data-hidden] .settings-tab-icon {
+  color: var(--ink-3);
+}
+
+.settings-tab-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-control);
+  background: var(--ground-3);
+  color: var(--ink-1);
+}
+
+.settings-order {
+  display: flex;
+  gap: 2px;
+}
+
+.settings-icon-button {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--ink-2);
+  cursor: pointer;
+  transition:
+    background-color var(--t-micro) var(--ease-out),
+    color var(--t-micro) var(--ease-out);
+}
+
+.settings-icon-button:hover:not(:disabled) {
+  background: var(--ground-3);
+  color: var(--ink-1);
+}
+
+.settings-icon-button:active:not(:disabled) {
+  background: var(--ground-4);
+}
+
+.settings-icon-button:disabled {
+  color: var(--ground-4);
+  cursor: default;
+}
+
+/* The switch: a track and a knob, drawn on the native checkbox. */
+.settings-switch {
+  position: relative;
+  flex: none;
+  width: 36px;
+  height: 20px;
+  margin: 0;
+  border-radius: 10px;
+  background: var(--ground-4);
+  appearance: none;
+  cursor: pointer;
+  transition: background-color var(--t-micro) var(--ease-out);
+}
+
+.settings-switch::after {
+  content: "";
+  position: absolute;
+  inset-block-start: 3px;
+  inset-inline-start: 3px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--ink-2);
+  transition:
+    transform var(--t-micro) var(--ease-out),
+    background-color var(--t-micro) var(--ease-out);
+}
+
+/* On: the accent's "this is active" role. */
+.settings-switch:checked {
+  background: var(--accent);
+}
+
+.settings-switch:checked::after {
+  background: var(--ground-0);
+  transform: translateX(16px);
+}
+
+.settings-switch:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.settings-error {
+  margin: 0;
+  padding: var(--space-2) var(--space-4);
+  background: var(--err-ground);
+  color: var(--err);
+}
+
+.settings-footer {
+  color: var(--ink-3);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .settings-switch,
+  .settings-switch::after {
+    transition: none;
+  }
+}

@@ -110,7 +110,8 @@
   }
 }
 
-.rail-palette {
+/* Settings and the palette sit together at the foot of the rail. */
+.rail-settings {
   margin-block-start: auto;
 }
 

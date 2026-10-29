@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { TABS, type Tab, type TabStatus } from "./tabs";
+import { SETTINGS_TAB, TABS, type Tab, type TabStatus } from "./tabs";
 
 export type Layout = {
   /** Tab ids on screen, left to right: one, or two in a split. */
@@ -16,12 +16,14 @@ const LAYOUT_KEY = "shell:layout";
 export const MIN_RATIO = 0.25;
 export const MAX_RATIO = 0.75;
 
-export const tabById = (id: string): Tab => TABS.find((t) => t.id === id) ?? TABS[0];
+export const tabById = (id: string): Tab =>
+  id === SETTINGS_TAB.id ? SETTINGS_TAB : (TABS.find((t) => t.id === id) ?? TABS[0]);
 
-function savedLayout(): Layout {
+/** The saved layout, keeping only tabs that may be shown (`allowed`). */
+function savedLayout(allowed: string[]): Layout {
   try {
     const raw = JSON.parse(localStorage.getItem(LAYOUT_KEY) ?? "null") as Layout | null;
-    const panes = (raw?.panes ?? []).filter((id) => TABS.some((t) => t.id === id)).slice(0, 2);
+    const panes = (raw?.panes ?? []).filter((id) => allowed.includes(id)).slice(0, 2);
     if (panes.length > 0) {
       return {
         panes,
@@ -32,7 +34,7 @@ function savedLayout(): Layout {
   } catch {
     // A missing or unreadable saved layout just means the default one.
   }
-  return { panes: [TABS[0].id], focused: 0, ratio: 0.5 };
+  return { panes: [allowed[0]], focused: 0, ratio: 0.5 };
 }
 
 type Bounds = { x: number; y: number; width: number; height: number };
@@ -58,8 +60,11 @@ function fitZoom(tab: Tab, width: number): number {
  * The panes, what's in them, and each tab's status. `apply` puts the layout on
  * screen: it starts local tools, then asks Rust to show exactly these tabs.
  */
-export function useLayout() {
-  const [layout, setLayout] = useState<Layout>(savedLayout);
+export function useLayout({ visibleIds, warmUp }: { visibleIds: string[]; warmUp: boolean }) {
+  const [layout, setLayout] = useState<Layout>(() => savedLayout([...visibleIds, SETTINGS_TAB.id]));
+  // Read once, after launch: the warm-up is a startup step.
+  const warmUpRef = useRef({ visibleIds, warmUp });
+  warmUpRef.current = { visibleIds, warmUp };
   const [statuses, setStatuses] = useState<Record<string, TabStatus>>({});
   const [hidden, setHidden] = useState(false);
   const bodies = useRef<(HTMLElement | null)[]>([]);
@@ -197,17 +202,23 @@ export function useLayout() {
   );
 
   // Warm-up: shortly after launch, start every local tool and load every tab
-  // out of sight, so opening one later is instant, like a native app.
+  // the rail shows, out of sight, so opening one later is instant, like a
+  // native app. Off in Settings, tabs load when first opened.
   useEffect(() => {
     const warmUp = async () => {
-      const el = bodies.current[0];
+      const { visibleIds, warmUp } = warmUpRef.current;
+      if (!warmUp) return;
+      // Native panes have no webview body; any measured pane gives the size.
+      const el = bodies.current.find(Boolean);
       if (!el) return;
       const { width, height } = measure(el);
       const preload = (tab: Tab, url: string) =>
         invoke("preload_tabs", {
           views: [{ id: tab.id, url, bounds: { x: 0, y: 0, width, height }, zoom: fitZoom(tab, width) }],
         });
-      const waiting = TABS.filter((tab) => !layoutRef.current.panes.includes(tab.id));
+      const waiting = TABS.filter(
+        (tab) => visibleIds.includes(tab.id) && !layoutRef.current.panes.includes(tab.id),
+      );
       // Local tools first: they take the longest (Paperclip ~30s).
       await Promise.all(
         waiting.map(async (tab) => {

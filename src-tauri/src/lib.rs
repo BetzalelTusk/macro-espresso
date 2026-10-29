@@ -3,6 +3,7 @@ mod services;
 mod shortcuts;
 
 use std::collections::{HashMap, HashSet};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use std::time::Duration;
 
@@ -107,6 +108,8 @@ const OFFSCREEN: f64 = -30_000.0;
 /// The name people see (window, tray). Internals keep the `com.betza.shell`
 /// identifier: it names the data folder that holds every tab's logins.
 const APP_NAME: &str = "Macro Espresso";
+/// Launch argument for starting in the tray (used by sign-in autostart).
+const HIDDEN_ARG: &str = "--hidden";
 
 /// Where a tab webview goes, in logical pixels, as measured by the UI.
 #[derive(Clone, Copy, serde::Deserialize)]
@@ -443,6 +446,14 @@ async fn close_tab(window: Window, tabs: State<'_, Mutex<Tabs>>, id: String) -> 
     Ok(())
 }
 
+/// Whether closing the window hides it to the tray (Settings → Window).
+struct CloseToTray(AtomicBool);
+
+#[tauri::command]
+fn set_close_to_tray(state: State<'_, CloseToTray>, enabled: bool) {
+    state.0.store(enabled, Ordering::Relaxed);
+}
+
 /// Quit for real (closing the window only hides it to the tray).
 #[tauri::command]
 fn quit(app: AppHandle) {
@@ -496,14 +507,23 @@ pub fn run() {
             show_main(app);
         }))
         .plugin(tauri_plugin_opener::init())
+        // "Open when you sign in to Windows" (Settings): launches with
+        // --hidden, straight into the tray.
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            Some(vec![HIDDEN_ARG]),
+        ))
         .plugin(shortcuts::plugin())
         .manage(Mutex::new(Tabs::default()))
         .manage(services::Services::default())
+        .manage(CloseToTray(AtomicBool::new(true)))
         .setup(|app| {
             let width = 1280.0;
             let height = 800.0;
+            let start_hidden = std::env::args().any(|arg| arg == HIDDEN_ARG);
             let window = WindowBuilder::new(app, "main")
                 .title(APP_NAME)
+                .visible(!start_hidden)
                 .inner_size(width, height)
                 .min_inner_size(800.0, 500.0)
                 .theme(Some(tauri::Theme::Dark))
@@ -520,13 +540,17 @@ pub fn run() {
             shortcuts::bind_to_focus(&window);
 
             // Closing the window keeps tabs (and their notifications) alive in
-            // the tray; Quit in the tray or palette ends the app.
+            // the tray, unless Settings turned that off; Quit in the tray or
+            // palette ends the app either way.
             let hide = window.clone();
             window.on_window_event(move |event| {
                 if let WindowEvent::CloseRequested { api, .. } = event {
-                    api.prevent_close();
-                    save_tab_pages(hide.app_handle());
-                    let _ = hide.hide();
+                    let to_tray = hide.app_handle().state::<CloseToTray>().0.load(Ordering::Relaxed);
+                    if to_tray {
+                        api.prevent_close();
+                        save_tab_pages(hide.app_handle());
+                        let _ = hide.hide();
+                    }
                 }
             });
             tint_title_bar(&window);
@@ -539,6 +563,7 @@ pub fn run() {
             hide_tabs,
             set_tab_bounds,
             close_tab,
+            set_close_to_tray,
             quit,
             services::ensure_service,
             services::restart_service,

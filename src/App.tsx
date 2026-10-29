@@ -17,7 +17,9 @@ import { Files } from "./components/Files";
 import { Palette, type PaletteCommand } from "./components/Palette";
 import { Panes } from "./components/Panes";
 import { Rail } from "./components/Rail";
-import { TABS, type Tab, type TabStatus } from "./tabs";
+import { SettingsView } from "./components/SettingsView";
+import { useSettings, visibleTabs } from "./settings";
+import { SETTINGS_TAB, type Tab, type TabStatus } from "./tabs";
 import { tabById, useLayout, type Layout } from "./useLayout";
 import "./App.css";
 
@@ -57,24 +59,42 @@ function swap(layout: Layout): Layout {
 }
 
 /** Ctrl+\: close the split, or open one with the next tab not on screen. */
-function toggleSplit(layout: Layout): Layout {
+function toggleSplit(layout: Layout, tabs: Tab[]): Layout {
   if (layout.panes.length > 1) return closePane(layout, 1 - layout.focused);
-  const start = TABS.findIndex((t) => t.id === layout.panes[0]);
-  const next = TABS[(start + 1) % TABS.length];
-  return openInSplit(layout, next);
+  const start = tabs.findIndex((t) => t.id === layout.panes[0]);
+  const next = tabs[(start + 1) % tabs.length];
+  return next.id === layout.panes[0] ? layout : openInSplit(layout, next);
 }
 
-function cycle(layout: Layout, step: number): Layout {
-  const current = TABS.findIndex((t) => t.id === layout.panes[layout.focused]);
-  for (let i = 1; i <= TABS.length; i++) {
-    const tab = TABS[(current + step * i + TABS.length * i) % TABS.length];
+function cycle(layout: Layout, step: number, tabs: Tab[]): Layout {
+  const current = tabs.findIndex((t) => t.id === layout.panes[layout.focused]);
+  for (let i = 1; i <= tabs.length; i++) {
+    const tab = tabs[(current + step * i + tabs.length * i) % tabs.length];
     if (!layout.panes.includes(tab.id)) return select(layout, tab);
   }
   return layout;
 }
 
+/** Swap tabs the person just hid out of the panes. */
+function withoutHidden(layout: Layout, tabs: Tab[]): Layout {
+  const allowed = (id: string) => id === SETTINGS_TAB.id || tabs.some((t) => t.id === id);
+  if (layout.panes.every(allowed)) return layout;
+  const panes: string[] = [];
+  for (const id of layout.panes) {
+    const replacement = allowed(id) ? id : tabs.find((t) => !panes.includes(t.id) && !layout.panes.includes(t.id))?.id;
+    if (replacement && !panes.includes(replacement)) panes.push(replacement);
+  }
+  if (panes.length === 0) panes.push(tabs[0].id);
+  return { ...layout, panes, focused: Math.min(layout.focused, panes.length - 1) };
+}
+
 function App() {
-  const { layout, update, statuses, hidden, bodies, hideAll, reshow, reload } = useLayout();
+  const { settings, update: updateSettings } = useSettings();
+  const tabs = useMemo(() => visibleTabs(settings), [settings]);
+  const { layout, update, statuses, hidden, bodies, hideAll, reshow, reload } = useLayout({
+    visibleIds: tabs.map((t) => t.id),
+    warmUp: settings.warmUp,
+  });
   const [paletteOpen, setPaletteOpen] = useState(false);
   const focusedTab = tabById(layout.panes[layout.focused]);
   const paletteRef = useRef(paletteOpen);
@@ -89,6 +109,11 @@ function App() {
     },
     [reshow, update],
   );
+
+  // A tab hidden in Settings leaves the screen too.
+  useEffect(() => {
+    update((l) => withoutHidden(l, tabs));
+  }, [tabs, update]);
 
   const openPalette = useCallback(async () => {
     await hideAll();
@@ -174,30 +199,36 @@ function App() {
       } else if (payload === "quit") {
         quit();
       } else if (payload === "toggle-split") {
-        change(toggleSplit);
+        change((l) => toggleSplit(l, tabs));
       } else if (payload === "next-tab") {
-        change((l) => cycle(l, 1));
+        change((l) => cycle(l, 1, tabs));
       } else if (payload === "previous-tab") {
-        change((l) => cycle(l, -1));
+        change((l) => cycle(l, -1, tabs));
       } else if (payload.startsWith("tab-")) {
-        const tab = TABS[Number(payload.slice(4)) - 1];
+        const tab = tabs[Number(payload.slice(4)) - 1];
         if (tab) change((l) => select(l, tab));
       }
     });
     return () => {
       void off.then((f) => f());
     };
-  }, [change, closePalette, openPalette, quit]);
+  }, [change, closePalette, openPalette, quit, tabs]);
 
   const commands = useMemo<PaletteCommand[]>(() => {
-    const list: PaletteCommand[] = TABS.map((tab, i) => ({
+    const list: PaletteCommand[] = tabs.map((tab, i) => ({
       id: `open-${tab.id}`,
       label: `Open ${tab.name}`,
       icon: tab.icon,
       hint: i < 9 ? `Ctrl ${i + 1}` : undefined,
       run: () => change((l) => select(l, tab)),
     }));
-    for (const tab of TABS) {
+    list.push({
+      id: "open-settings",
+      label: "Open Settings",
+      icon: SETTINGS_TAB.icon,
+      run: () => change((l) => select(l, SETTINGS_TAB)),
+    });
+    for (const tab of tabs) {
       if (!layout.panes.includes(tab.id)) {
         list.push({
           id: `split-${tab.id}`,
@@ -209,14 +240,20 @@ function App() {
     }
     if (layout.panes.length > 1) {
       list.push(
-        { id: "close-split", label: "Close split", icon: SquareX, hint: "Ctrl \\", run: () => change(toggleSplit) },
+        {
+          id: "close-split",
+          label: "Close split",
+          icon: SquareX,
+          hint: "Ctrl \\",
+          run: () => change((l) => toggleSplit(l, tabs)),
+        },
         { id: "swap", label: "Swap sides", icon: ArrowLeftRight, run: () => change(swap) },
       );
     }
     for (const action of tabActions(focusedTab)) list.push({ ...action });
     list.push({ id: "quit", label: "Quit Macro Espresso", icon: Power, hint: "Ctrl Q", run: quit });
     return list;
-  }, [change, focusedTab, layout.panes, quit, tabActions]);
+  }, [change, focusedTab, layout.panes, quit, tabActions, tabs]);
 
   const paneStatus = (id: string): TabStatus => statuses[id] ?? { state: "idle" };
   const busy = layout.panes.some((id) => ["starting", "loading"].includes(paneStatus(id).state));
@@ -229,7 +266,8 @@ function App() {
   return (
     <div className="shell">
       <Rail
-        tabs={TABS}
+        tabs={tabs}
+        settingsTab={SETTINGS_TAB}
         activeId={focusedTab.id}
         shownIds={layout.panes}
         statuses={statuses}
@@ -257,6 +295,8 @@ function App() {
             id === "files" ? (
               // Native view: stays mounted (folder, scroll) even under the palette.
               <Files />
+            ) : id === SETTINGS_TAB.id ? (
+              <SettingsView settings={settings} onChange={updateSettings} />
             ) : paletteOpen ? null : (
               <StageMessage tab={tabById(id)} status={paneStatus(id)} onRetry={() => void reload(tabById(id))} />
             )
