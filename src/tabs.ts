@@ -1,5 +1,5 @@
-import { Disc3, FolderClosed, LayoutGrid, Settings } from "lucide-react";
-import { PaperclipIcon, T3Icon, type TabIcon, WhatsAppIcon } from "./brand-icons";
+import { FolderClosed, LayoutGrid, Settings } from "lucide-react";
+import { PaperclipIcon, SpotifyIcon, T3Icon, type TabIcon, WhatsAppIcon } from "./brand-icons";
 
 type Common = {
   id: string;
@@ -36,7 +36,7 @@ export const TABS: Tab[] = [
   {
     id: "spotify",
     name: "Spotify",
-    icon: Disc3,
+    icon: SpotifyIcon,
     kind: "web",
     url: "https://open.spotify.com",
     // body { min-width: 800px } in the web player.
