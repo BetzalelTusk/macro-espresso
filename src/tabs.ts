@@ -1,4 +1,4 @@
-import { FolderClosed, LayoutGrid, Settings } from "lucide-react";
+import { FolderClosed, LayoutGrid, NotebookPen, Settings } from "lucide-react";
 import { PaperclipIcon, SpotifyIcon, T3Icon, type TabIcon, WhatsAppIcon } from "./brand-icons";
 
 type Common = {
@@ -57,6 +57,15 @@ export const TABS: Tab[] = [
     kind: "local",
     service: "paperclip",
     url: "http://127.0.0.1:3100",
+  },
+  {
+    // Benji Tusk's astro-mdx-editor on a local Astro blog (services.rs "notes").
+    id: "notes",
+    name: "Notes",
+    icon: NotebookPen,
+    kind: "local",
+    service: "notes",
+    url: "http://127.0.0.1:3200/__edit",
   },
   { id: "files", name: "Files", icon: FolderClosed, kind: "native" },
 ];

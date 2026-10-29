@@ -165,6 +165,41 @@ fn spec(id: &str) -> Result<Spec, String> {
                 cwd: home,
             })
         }
+        // Notes: an Astro blog site in Documents with astro-mdx-editor, which
+        // edits its posts live at /__edit while the dev server runs. The notes
+        // are plain .mdx files the person owns, in a git repo. Port 3200, so it
+        // never meets an Astro project of their own on 4321.
+        "notes" => {
+            let site = home.join("Documents").join("Macro Espresso Notes");
+            let astro = site.join("node_modules/astro/bin/astro.mjs");
+            if !astro.exists() {
+                return Err(format!(
+                    "Notes isn't set up yet: expected the notes site at {}",
+                    site.display()
+                ));
+            }
+            Ok(Spec {
+                program: env_path("ProgramFiles")?.join("nodejs").join("node.exe"),
+                args: vec![
+                    astro.to_string_lossy().into_owned(),
+                    "dev".into(),
+                    "--host".into(),
+                    "127.0.0.1".into(),
+                    "--port".into(),
+                    "3200".into(),
+                ],
+                cwd: site,
+                port: 3200,
+                pairing_prefix: None,
+                owned_dir: None,
+                shutdown: None,
+                // Only a dev server with exactly these arguments is ours; the
+                // person's own `astro dev` runs elsewhere are left alone.
+                owned_by_args: true,
+                env: vec![("ASTRO_TELEMETRY_DISABLED", "1".into())],
+                ready: Ready { path: "/__edit", body_contains: None },
+            })
+        }
         _ => Err(format!("unknown service {id}")),
     }
 }
