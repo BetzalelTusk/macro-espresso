@@ -47,24 +47,46 @@ impl Bounds {
     }
 }
 
+fn full_size() -> f64 {
+    1.0
+}
+
+/// Where a tab goes and how far its page is zoomed (below 1 when the pane is
+/// narrower than the site's minimum layout width).
+#[derive(Clone, Copy, serde::Deserialize)]
+struct Place {
+    bounds: Bounds,
+    #[serde(default = "full_size")]
+    zoom: f64,
+}
+
+impl Place {
+    fn apply<R: tauri::Runtime>(self, webview: &tauri::Webview<R>) -> tauri::Result<()> {
+        webview.set_bounds(self.bounds.rect())?;
+        webview.set_zoom(self.zoom)
+    }
+}
+
 /// One tab the UI wants on screen.
 #[derive(serde::Deserialize)]
 struct View {
     id: String,
     url: String,
-    bounds: Bounds,
+    #[serde(flatten)]
+    place: Place,
 }
 
 #[derive(serde::Deserialize)]
 struct Placement {
     id: String,
-    bounds: Bounds,
+    #[serde(flatten)]
+    place: Place,
 }
 
 #[derive(Default)]
 struct Tabs {
-    /// The tabs on screen right now (one, or two in a split), with their bounds.
-    visible: HashMap<String, Bounds>,
+    /// The tabs on screen right now (one, or two in a split), and where.
+    visible: HashMap<String, Place>,
     /// Tabs whose first page load finished (or timed out) and may be shown.
     revealed: HashSet<String>,
     /// The tab that should hold keyboard focus once it's revealed.
@@ -97,8 +119,8 @@ fn reveal(app: &AppHandle, id: &str) {
         return;
     };
     match tabs.visible.get(id) {
-        Some(bounds) => {
-            let _ = webview.set_bounds(bounds.rect());
+        Some(place) => {
+            let _ = place.apply(&webview);
             let _ = webview.show();
             if tabs.focus.as_deref() == Some(id) {
                 let _ = webview.set_focus();
@@ -123,7 +145,7 @@ async fn show_tabs(
     focus: Option<String>,
 ) -> Result<Vec<String>, String> {
     let mut tabs = tabs.lock().map_err(|e| e.to_string())?;
-    tabs.visible = views.iter().map(|v| (v.id.clone(), v.bounds)).collect();
+    tabs.visible = views.iter().map(|v| (v.id.clone(), v.place)).collect();
     tabs.focus = focus.clone();
 
     for webview in window.webviews() {
@@ -140,7 +162,7 @@ async fn show_tabs(
         let label = tab_label(&view.id);
         if let Some(webview) = window.get_webview(&label) {
             if tabs.revealed.contains(&view.id) {
-                webview.set_bounds(view.bounds.rect()).map_err(|e| e.to_string())?;
+                view.place.apply(&webview).map_err(|e| e.to_string())?;
                 webview.show().map_err(|e| e.to_string())?;
                 if focus.as_deref() == Some(view.id.as_str()) {
                     webview.set_focus().map_err(|e| e.to_string())?;
@@ -166,8 +188,13 @@ async fn show_tabs(
             .add_child(
                 builder,
                 LogicalPosition::new(OFFSCREEN, OFFSCREEN),
-                LogicalSize::new(view.bounds.width, view.bounds.height),
+                LogicalSize::new(view.place.bounds.width, view.place.bounds.height),
             )
+            .and_then(|webview| {
+                // Zoom before the first load so the page lays out at its size.
+                webview.set_zoom(view.place.zoom)?;
+                Ok(webview)
+            })
             .map_err(|e| e.to_string())?;
         let app = app.clone();
         let id = view.id;
@@ -208,12 +235,10 @@ async fn set_tab_bounds(
         if !tabs.visible.contains_key(&placement.id) {
             continue;
         }
-        tabs.visible.insert(placement.id.clone(), placement.bounds);
+        tabs.visible.insert(placement.id.clone(), placement.place);
         if tabs.revealed.contains(&placement.id) {
             if let Some(webview) = window.get_webview(&tab_label(&placement.id)) {
-                webview
-                    .set_bounds(placement.bounds.rect())
-                    .map_err(|e| e.to_string())?;
+                placement.place.apply(&webview).map_err(|e| e.to_string())?;
             }
         }
     }

@@ -43,6 +43,18 @@ function measure(el: HTMLElement): Bounds {
 }
 
 /**
+ * Lowest zoom used to fit a site. The narrowest pane (MIN_RATIO of a minimum
+ * window) is ~300px, and WhatsApp needs 748px, so this must stay ≤ 0.4.
+ */
+const MIN_FIT_ZOOM = 0.4;
+
+/** Zoom that lets a site with a minimum width fit a narrower pane. */
+function fitZoom(tab: Tab, width: number): number {
+  if (!tab.minWidth || width >= tab.minWidth) return 1;
+  return Math.max(MIN_FIT_ZOOM, width / tab.minWidth);
+}
+
+/**
  * The panes, what's in them, and each tab's status. `apply` puts the layout on
  * screen: it starts local tools, then asks Rust to show exactly these tabs.
  */
@@ -75,7 +87,10 @@ export function useLayout() {
   const placements = useCallback(() => {
     return layoutRef.current.panes.flatMap((id, i) => {
       const el = bodies.current[i];
-      return el && tabById(id).kind !== "native" ? [{ id, bounds: measure(el) }] : [];
+      const tab = tabById(id);
+      if (!el || tab.kind === "native") return [];
+      const bounds = measure(el);
+      return [{ id, bounds, zoom: fitZoom(tab, bounds.width) }];
     });
   }, []);
 
@@ -126,7 +141,8 @@ export function useLayout() {
         const el = bodies.current[i];
         if (tab.kind === "native" || !el) return [];
         if (statusesRef.current[id]?.state === "error") return [];
-        return [{ id, url: urls[id] ?? tab.url, bounds: measure(el) }];
+        const bounds = measure(el);
+        return [{ id, url: urls[id] ?? tab.url, bounds, zoom: fitZoom(tab, bounds.width) }];
       });
       try {
         const showing = await invoke<string[]>("show_tabs", {

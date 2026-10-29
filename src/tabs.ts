@@ -8,7 +8,16 @@ import {
   SquareTerminal,
 } from "lucide-react";
 
-type Common = { id: string; name: string; icon: LucideIcon };
+type Common = {
+  id: string;
+  name: string;
+  icon: LucideIcon;
+  /**
+   * The narrowest layout the site supports, in CSS px (its `min-width`). In a
+   * narrower pane the shell zooms the page out to fit instead of clipping it.
+   */
+  minWidth?: number;
+};
 
 export type Tab =
   | (Common & { kind: "web"; url: string })
@@ -25,8 +34,18 @@ export const TABS: Tab[] = [
     icon: MessageCircle,
     kind: "web",
     url: "https://web.whatsapp.com",
+    // Its app container has min-width: 748px and scrolls sideways below that.
+    minWidth: 748,
   },
-  { id: "spotify", name: "Spotify", icon: Disc3, kind: "web", url: "https://open.spotify.com" },
+  {
+    id: "spotify",
+    name: "Spotify",
+    icon: Disc3,
+    kind: "web",
+    url: "https://open.spotify.com",
+    // body { min-width: 800px } in the web player.
+    minWidth: 800,
+  },
   {
     id: "t3",
     name: "T3 Code",
