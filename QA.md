@@ -1,5 +1,43 @@
 # Shell — overnight QA loop
 
+## Morning summary (2026-10-29)
+
+Every item below is done and verified in the running app; the final regression passed
+17/17. Twelve commits overnight, from e1a71e1 to bdc5b64.
+
+**Install it:** run `Desktop\macro-desktop\Shell_0.1.0_arm64-setup.exe` (1.6 MB; the optimized
+build, smoke-tested: launches, restores your layout, quits cleanly). Close the test build
+first if it's open. Your logins, layout and Paperclip setup carry over.
+
+**What you asked for**
+- **Divider drag is smooth**: 60 fps (was re-rendering the whole app per mouse move).
+- **Spotify and WhatsApp fit any pane**: their sites have minimum widths (800 / 748 px);
+  below that the tab zooms to fit instead of being cut off.
+- **Spotify and WhatsApp are steady**: no reloads on tab switches; they keep running while
+  hidden (music and connection continue); logins survive restarts; links open in your
+  browser, sign-in popups stay in the app.
+- **T3 Code signs in by itself** on every start, including after a crash (an old T3 left
+  running used to force the pairing screen).
+- **Paperclip** opens straight to your Tavor Digital dashboard (no password: local mode);
+  Restart and quit work; nothing is left running after quit.
+- **Files tab is built**: places and drives, breadcrumbs, filter, sort, hidden-files toggle,
+  open/show-in-Explorer/copy path, keyboard control, fast on huge folders.
+
+**Also fixed or added**
+- Notifications were blocked in every tab; WhatsApp can now notify.
+- Tabs reopen on the page you left (e.g. a Spotify album).
+- Title bar tinted to match; film grain kept off content.
+- Two bugs the regression caught: tabs stopped following resizes after a swap; quick
+  arrow-key presses on the divider dropped steps.
+
+**Please check in the morning** (my tools can't see or do these):
+1. A real WhatsApp notification shows up (send yourself a message from your phone).
+2. The title bar looks graphite rather than grey.
+3. Drag the divider by hand, it should feel smooth.
+4. In T3 Code, enable Claude Code under Settings → Providers.
+
+---
+
 The work list for the autonomous loop (started 2026-10-29). Each round: take the first
 open item, fix or build it, **verify it in the running app** (CDP on port 9334, see
 "How to verify" below), commit, tick it here with a one-line result, then continue.
