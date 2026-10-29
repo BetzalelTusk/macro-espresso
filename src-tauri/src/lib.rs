@@ -20,8 +20,83 @@ use tauri::{
 const UI_LABEL: &str = "ui";
 const TAB_PREFIX: &str = "tab-";
 
-/// `--ground-0` in theme.css, so nothing flashes white before a page paints.
-const GROUND: Color = Color(0x15, 0x19, 0x1c, 0xff);
+/// `--ground-0` in theme.css (oklch 0.165 0.008 235 → #0b0f11), so nothing
+/// flashes a different colour before a page paints.
+const GROUND: Color = Color(0x0b, 0x0f, 0x11, 0xff);
+
+/// Title bar colours as Windows COLORREFs (0x00BBGGRR): caption `--ground-1`
+/// (#13181b, continuing the rail), text `--ink-2` (#acb2b5), border `--line`
+/// (#31363a).
+#[cfg(windows)]
+const TITLE_BAR: [(u32, u32); 3] = [(35, 0x001b_1813), (36, 0x00b5_b2ac), (34, 0x003a_3631)];
+
+/// Paint the native title bar in the shell's colours (Windows 11; older
+/// versions ignore these attributes and keep the dark title bar).
+#[cfg(windows)]
+fn tint_title_bar(window: &Window) {
+    #[link(name = "dwmapi")]
+    unsafe extern "system" {
+        fn DwmSetWindowAttribute(hwnd: isize, attribute: u32, value: *const u32, size: u32) -> i32;
+    }
+    let Ok(hwnd) = window.hwnd() else {
+        return;
+    };
+    for (attribute, colour) in TITLE_BAR {
+        // DWMWA_BORDER_COLOR (34), DWMWA_CAPTION_COLOR (35), DWMWA_TEXT_COLOR (36).
+        unsafe {
+            DwmSetWindowAttribute(hwnd.0 as isize, attribute, &colour, size_of::<u32>() as u32);
+        }
+    }
+}
+
+#[cfg(not(windows))]
+fn tint_title_bar(_window: &Window) {}
+
+/// Where each web tab was, saved on hide-to-tray and quit, so a restart
+/// reopens the same page (an album, a document) instead of the home page.
+fn tab_pages_file(app: &AppHandle) -> Option<std::path::PathBuf> {
+    app.path().app_config_dir().ok().map(|dir| dir.join("tab-pages.json"))
+}
+
+fn load_tab_pages(app: &AppHandle) -> HashMap<String, String> {
+    tab_pages_file(app)
+        .and_then(|path| std::fs::read_to_string(path).ok())
+        .and_then(|text| serde_json::from_str(&text).ok())
+        .unwrap_or_default()
+}
+
+fn save_tab_pages(app: &AppHandle) {
+    let Some(window) = main_window(app) else {
+        return;
+    };
+    let mut pages = load_tab_pages(app);
+    for webview in window.webviews() {
+        let Some(id) = webview.label().strip_prefix(TAB_PREFIX) else {
+            continue;
+        };
+        if let Ok(url) = webview.url() {
+            // Local tools sign in through one-time URLs; never replay those.
+            if url.scheme() == "https" {
+                pages.insert(id.to_owned(), url.to_string());
+            }
+        }
+    }
+    if let (Some(path), Ok(text)) = (tab_pages_file(app), serde_json::to_string_pretty(&pages)) {
+        if let Some(dir) = path.parent() {
+            let _ = std::fs::create_dir_all(dir);
+        }
+        let _ = std::fs::write(path, text);
+    }
+}
+
+/// The page to open for a new tab: its saved page if it's on the same site.
+fn restored_url(app: &AppHandle, id: &str, default: tauri::Url) -> tauri::Url {
+    load_tab_pages(app)
+        .get(id)
+        .and_then(|saved| saved.parse::<tauri::Url>().ok())
+        .filter(|saved| saved.origin() == default.origin() && default.scheme() == "https")
+        .unwrap_or(default)
+}
 
 /// Reveal a tab even if its page never reports a finished load.
 const REVEAL_FALLBACK: Duration = Duration::from_secs(12);
@@ -239,6 +314,7 @@ async fn show_tabs(
             .parse()
             .map_err(|e| format!("invalid url {}: {e}", view.url))?;
         let origin = parsed.origin().ascii_serialization();
+        let parsed = restored_url(&app, &view.id, parsed);
         let loaded_id = view.id.clone();
         let opener = app.clone();
         let builder = WebviewBuilder::new(&label, WebviewUrl::External(parsed))
@@ -422,9 +498,11 @@ pub fn run() {
             window.on_window_event(move |event| {
                 if let WindowEvent::CloseRequested { api, .. } = event {
                     api.prevent_close();
+                    save_tab_pages(hide.app_handle());
                     let _ = hide.hide();
                 }
             });
+            tint_title_bar(&window);
             build_tray(app)?;
             Ok(())
         })
@@ -444,9 +522,10 @@ pub fn run() {
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
-        .run(|app, event| {
-            if let tauri::RunEvent::Exit = event {
-                services::stop_all(&app.state::<services::Services>());
-            }
+        .run(|app, event| match event {
+            // Tab webviews are still alive here, so their pages can be saved.
+            tauri::RunEvent::ExitRequested { .. } => save_tab_pages(app),
+            tauri::RunEvent::Exit => services::stop_all(&app.state::<services::Services>()),
+            _ => {}
         });
 }

@@ -36,10 +36,10 @@ never push. Sign-in work means the sign-in *page* works and persists, not signin
 
 ## UI/UX polish
 
-- [ ] Window title bar matches the dark theme on Windows (or custom title bar).
-- [ ] Rail tooltips feel native (title attr is slow and plain).
+- [x] Window title bar matches the dark theme on Windows (or custom title bar).
+- [x] Rail tooltips feel native (title attr is slow and plain).
 - [x] Notifications from web tabs (WhatsApp) reach Windows while the shell runs.
-- [ ] Tab memory: reopening restores each tab's page, not only the layout.
+- [x] Tab memory: reopening restores each tab's page, not only the layout.
 - [ ] Review every screen against PROJECT.md and the anti-slop audit; fix findings.
 - [ ] Re-run the full regression (below) after all fixes.
 
@@ -90,3 +90,11 @@ never push. Sign-in work means the sign-in *page* works and persists, not signin
   doesn't answer). Each tab's origin is now set to allow notifications in its profile and later
   requests are answered allow (other permissions unchanged). WhatsApp: denied -> granted.
   Not shown a real toast overnight; the user should confirm one arrives.
+- Title bar: tinted with the shell's tokens via DWM (caption --ground-1, text --ink-2,
+  border --line); not visible to the test tools, user to check. Also fixed the native GROUND
+  colour (#15191c -> #0b0f11, the real --ground-0).
+- Tab memory: each https tab's page is saved on hide-to-tray and quit and reopened on the next
+  start if it's on the same site. Verified: Spotify /search survives a restart. Local tools
+  excluded (one-time sign-in URLs).
+- Rail tooltips: kept the native title tooltip on purpose. Any HTML tooltip would draw into the
+  stage, where the tab webviews cover it (PROJECT.md anti-pattern).
