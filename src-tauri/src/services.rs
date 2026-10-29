@@ -15,6 +15,8 @@ use std::time::{Duration, Instant};
 use tauri::{AppHandle, Manager, State};
 
 const STARTUP_TIMEOUT: Duration = Duration::from_secs(120);
+/// Longest a cleanup helper (pg_ctl, the leftover search) may run.
+const CLEANUP_TIMEOUT: Duration = Duration::from_secs(20);
 /// How long to keep looking for a pairing URL after the tool serves pages (x 500 ms).
 const PAIRING_WAIT_STEPS: u32 = 20;
 
@@ -194,8 +196,6 @@ fn http_ready(port: u16) -> bool {
 /// line, so match on that.
 #[cfg(windows)]
 fn kill_processes_matching(markers: &[String]) {
-    use std::os::windows::process::CommandExt;
-    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
     if markers.is_empty() {
         return;
     }
@@ -204,21 +204,46 @@ fn kill_processes_matching(markers: &[String]) {
         .iter()
         .map(|m| format!("'{}'", m.replace('\'', "''")))
         .collect();
+    // The script's own command line contains the markers: skip itself ($PID),
+    // or it can stop itself before reaching the leftovers.
     let script = format!(
-        "$marks = @({}); Get-CimInstance Win32_Process | Where-Object {{ $c = $_.CommandLine; $c -and ($c = $c.Replace('/', '\\')) -and ($marks | Where-Object {{ $c.IndexOf($_, [StringComparison]::OrdinalIgnoreCase) -ge 0 }}) }} | ForEach-Object {{ Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }}",
+        "$marks = @({}); Get-CimInstance Win32_Process | Where-Object {{ $c = $_.CommandLine; $_.ProcessId -ne $PID -and $c -and ($c = $c.Replace('/', '\\')) -and ($marks | Where-Object {{ $c.IndexOf($_, [StringComparison]::OrdinalIgnoreCase) -ge 0 }}) }} | ForEach-Object {{ Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }}",
         quoted.join(", "),
     );
-    let _ = Command::new("powershell")
-        .args(["-NoProfile", "-NonInteractive", "-Command", &script])
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .creation_flags(CREATE_NO_WINDOW)
-        .status();
+    let mut command = Command::new("powershell");
+    command.args(["-NoProfile", "-NonInteractive", "-Command", &script]);
+    run_hidden(command, CLEANUP_TIMEOUT);
 }
 
 #[cfg(not(windows))]
 fn kill_processes_matching(_markers: &[String]) {}
+
+/// Run a helper program without a window, giving up on it after `timeout` so
+/// a stuck helper can't stall a tool's start or the shell's quit.
+fn run_hidden(mut command: Command, timeout: Duration) {
+    command
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        command.creation_flags(CREATE_NO_WINDOW);
+    }
+    let Ok(mut child) = command.spawn() else {
+        return;
+    };
+    let begun = Instant::now();
+    while let Ok(None) = child.try_wait() {
+        if begun.elapsed() > timeout {
+            let _ = child.kill();
+            let _ = child.wait();
+            return;
+        }
+        std::thread::sleep(Duration::from_millis(100));
+    }
+}
 
 fn last_lines(path: &Path, count: usize) -> String {
     let Ok(file) = File::open(path) else {
@@ -300,7 +325,7 @@ pub async fn ensure_service(
         }
         // Running, but not started by this run of the shell: an orphan from a
         // crash or force-quit, whose sign-in URL we never saw. Replace it.
-        clean_up_leftovers(&spec);
+        clean_up_leftovers_in_background(&id).await?;
         for _ in 0..20 {
             if !port_open(spec.port) {
                 break;
@@ -327,16 +352,26 @@ pub async fn ensure_service(
     std::fs::create_dir_all(&logs).map_err(|e| e.to_string())?;
     let log = logs.join(format!("{id}.log"));
 
-    {
+    let running = || -> Result<bool, String> {
         let mut started = services.0.lock().map_err(|e| e.to_string())?;
-        let running = match started.get_mut(&id).and_then(|s| s.child.as_mut()) {
+        Ok(match started.get_mut(&id).and_then(|s| s.child.as_mut()) {
             Some(child) => child.try_wait().map_err(|e| e.to_string())?.is_none(),
             None => false,
-        };
-        // A tool that's already listening (started outside the shell, or still
-        // warming up) only needs waiting for.
-        if !running && !port_open(spec.port) {
-            clean_up_leftovers(&spec);
+        })
+    };
+    // A tool that's already listening (started outside the shell, or still
+    // warming up) only needs waiting for.
+    if !running()? && !port_open(spec.port) {
+        // Without holding the lock: cleanup can take seconds, and the other
+        // tool's start must not wait on it.
+        clean_up_leftovers_in_background(&id).await?;
+        let mut started = services.0.lock().map_err(|e| e.to_string())?;
+        // Another call may have started it during the cleanup.
+        let started_meanwhile = started
+            .get_mut(&id)
+            .and_then(|s| s.child.as_mut())
+            .is_some_and(|child| matches!(child.try_wait(), Ok(None)));
+        if !started_meanwhile {
             let log_offset = std::fs::metadata(&log).map(|m| m.len()).unwrap_or(0);
             let child = spawn(&spec, &log)?;
             started.insert(
@@ -408,21 +443,19 @@ fn clean_up_leftovers(spec: &Spec) {
     if let Some((program, args)) = &spec.shutdown {
         if program.exists() {
             let mut command = Command::new(program);
-            command
-                .args(args)
-                .stdin(Stdio::null())
-                .stdout(Stdio::null())
-                .stderr(Stdio::null());
-            #[cfg(windows)]
-            {
-                use std::os::windows::process::CommandExt;
-                const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-                command.creation_flags(CREATE_NO_WINDOW);
-            }
-            let _ = command.status();
+            command.args(args);
+            run_hidden(command, CLEANUP_TIMEOUT);
         }
     }
     kill_processes_matching(&spec.leftover_markers());
+}
+
+/// `clean_up_leftovers` off the async runtime: it waits on helper programs.
+async fn clean_up_leftovers_in_background(id: &str) -> Result<(), String> {
+    let spec = spec(id)?;
+    tokio::task::spawn_blocking(move || clean_up_leftovers(&spec))
+        .await
+        .map_err(|e| e.to_string())
 }
 
 /// Kill a tool's process and everything it spawned.
@@ -447,13 +480,12 @@ fn stop_child(mut child: Child) {
 /// `ensure_service` starts it fresh.
 #[tauri::command]
 pub async fn restart_service(services: State<'_, Services>, id: String) -> Result<(), String> {
-    let spec = spec(&id)?;
+    spec(&id)?;
     let run = services.0.lock().map_err(|e| e.to_string())?.remove(&id);
     if let Some(child) = run.and_then(|r| r.child) {
         stop_child(child);
     }
-    clean_up_leftovers(&spec);
-    Ok(())
+    clean_up_leftovers_in_background(&id).await
 }
 
 /// Show tool `id`'s log file in File Explorer.

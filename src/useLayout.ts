@@ -76,6 +76,29 @@ export function useLayout() {
     setStatuses((s) => ({ ...s, [id]: status }));
   }, []);
 
+  // One start per tool at a time, shared by opening a tab and the warm-up.
+  // A fresh start's sign-in URL waits in `pairings` for whichever creates the
+  // tab's webview first (`takePairing`).
+  const starting = useRef(new Map<string, Promise<void>>());
+  const pairings = useRef(new Map<string, string>());
+  const startTool = useCallback((tab: Extract<Tab, { kind: "local" }>) => {
+    let start = starting.current.get(tab.id);
+    if (!start) {
+      start = invoke<string | null>("ensure_service", { id: tab.service })
+        .then((pairing) => {
+          if (pairing) pairings.current.set(tab.id, pairing);
+        })
+        .finally(() => starting.current.delete(tab.id));
+      starting.current.set(tab.id, start);
+    }
+    return start;
+  }, []);
+  const takePairing = (id: string) => {
+    const pairing = pairings.current.get(id);
+    pairings.current.delete(id);
+    return pairing;
+  };
+
   useEffect(() => {
     try {
       localStorage.setItem(LAYOUT_KEY, JSON.stringify(layout));
@@ -114,11 +137,7 @@ export function useLayout() {
             setStatus(tab.id, { state: "starting" });
           }
           try {
-            const pairing = await invoke<string | null>("ensure_service", { id: tab.service });
-            if (pairing) {
-              await invoke("close_tab", { id: tab.id });
-              urls[tab.id] = pairing;
-            }
+            await startTool(tab);
           } catch (e) {
             setStatus(tab.id, { state: "error", message: String(e) });
           }
@@ -134,6 +153,16 @@ export function useLayout() {
           return out;
         });
         return;
+      }
+
+      // Only now take sign-in URLs: an apply that lost to a newer one leaves
+      // them for the tab's next webview.
+      for (const tab of tabs) {
+        const pairing = takePairing(tab.id);
+        if (!pairing) continue;
+        // A webview made before this run of the tool can't sign in.
+        await invoke("close_tab", { id: tab.id });
+        urls[tab.id] = pairing;
       }
 
       const views = next.panes.flatMap((id, i) => {
@@ -164,8 +193,47 @@ export function useLayout() {
         for (const view of views) setStatus(view.id, { state: "error", message: String(e) });
       }
     },
-    [setStatus],
+    [setStatus, startTool],
   );
+
+  // Warm-up: shortly after launch, start every local tool and load every tab
+  // out of sight, so opening one later is instant, like a native app.
+  useEffect(() => {
+    const warmUp = async () => {
+      const el = bodies.current[0];
+      if (!el) return;
+      const { width, height } = measure(el);
+      const preload = (tab: Tab, url: string) =>
+        invoke("preload_tabs", {
+          views: [{ id: tab.id, url, bounds: { x: 0, y: 0, width, height }, zoom: fitZoom(tab, width) }],
+        });
+      const waiting = TABS.filter((tab) => !layoutRef.current.panes.includes(tab.id));
+      // Local tools first: they take the longest (Paperclip ~30s).
+      await Promise.all(
+        waiting.map(async (tab) => {
+          if (tab.kind !== "local") return;
+          if (!statusesRef.current[tab.id]) setStatus(tab.id, { state: "starting" });
+          try {
+            await startTool(tab);
+          } catch (e) {
+            setStatus(tab.id, { state: "error", message: String(e) });
+            return;
+          }
+          // Opened meanwhile: `apply` made (or is making) its webview.
+          if (layoutRef.current.panes.includes(tab.id)) return;
+          await preload(tab, takePairing(tab.id) ?? tab.url).catch(() => undefined);
+          if (statusesRef.current[tab.id]?.state === "starting") setStatus(tab.id, { state: "loading" });
+        }).concat(
+          waiting.map(async (tab) => {
+            if (tab.kind === "web") await preload(tab, tab.url).catch(() => undefined);
+          }),
+        ),
+      );
+    };
+    // After the first layout is up, so the visible tabs load first.
+    const timer = setTimeout(() => void warmUp(), 1500);
+    return () => clearTimeout(timer);
+  }, [setStatus, startTool]);
 
   /** Change the layout and put it on screen once React has laid the panes out. */
   const update = useCallback((change: (current: Layout) => Layout) => {

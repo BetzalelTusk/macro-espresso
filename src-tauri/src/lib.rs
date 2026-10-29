@@ -294,71 +294,95 @@ async fn show_tabs(
 
     let mut showing = Vec::new();
     for view in views {
-        let label = tab_label(&view.id);
-        if let Some(webview) = window.get_webview(&label) {
-            if tabs.revealed.contains(&view.id) {
-                view.place
-                    .apply(&webview, &mut tabs.zooms, &view.id)
-                    .map_err(|e| e.to_string())?;
-                webview.show().map_err(|e| e.to_string())?;
-                if focus.as_deref() == Some(view.id.as_str()) {
-                    webview.set_focus().map_err(|e| e.to_string())?;
-                }
-                showing.push(view.id);
-            }
+        let Some(webview) = window.get_webview(&tab_label(&view.id)) else {
+            create_tab(&app, &window, &mut tabs, view)?;
             continue;
+        };
+        if tabs.revealed.contains(&view.id) {
+            view.place
+                .apply(&webview, &mut tabs.zooms, &view.id)
+                .map_err(|e| e.to_string())?;
+            webview.show().map_err(|e| e.to_string())?;
+            if focus.as_deref() == Some(view.id.as_str()) {
+                webview.set_focus().map_err(|e| e.to_string())?;
+            }
+            showing.push(view.id);
         }
-
-        let parsed: tauri::Url = view
-            .url
-            .parse()
-            .map_err(|e| format!("invalid url {}: {e}", view.url))?;
-        let origin = parsed.origin().ascii_serialization();
-        let parsed = restored_url(&app, &view.id, parsed);
-        let loaded_id = view.id.clone();
-        let opener = app.clone();
-        let builder = WebviewBuilder::new(&label, WebviewUrl::External(parsed))
-            .background_color(GROUND)
-            .on_page_load(move |webview, payload| {
-                if payload.event() == PageLoadEvent::Finished {
-                    reveal(webview.app_handle(), &loaded_id);
-                }
-            })
-            .on_new_window(move |url, features| {
-                // A sized popup is a sign-in flow (window.open with a size):
-                // keep it, it reports back to the page. A plain new-tab link
-                // goes to the default browser instead of a bare window.
-                if features.size().is_some() {
-                    return NewWindowResponse::Allow;
-                }
-                use tauri_plugin_opener::OpenerExt;
-                if matches!(url.scheme(), "http" | "https" | "mailto") {
-                    let _ = opener.opener().open_url(url.as_str(), None::<&str>);
-                }
-                NewWindowResponse::Deny
-            });
-        window
-            .add_child(
-                builder,
-                LogicalPosition::new(OFFSCREEN, OFFSCREEN),
-                LogicalSize::new(view.place.bounds.width, view.place.bounds.height),
-            )
-            .and_then(|webview| {
-                // Zoom before the first load so the page lays out at its size.
-                webview.set_zoom(view.place.zoom)?;
-                allow_notifications(&webview, origin);
-                Ok(webview)
-            })
-            .map_err(|e| e.to_string())?;
-        tabs.zooms.insert(view.id.clone(), view.place.zoom);
-        let app = app.clone();
-        let id = view.id;
-        tauri::async_runtime::spawn(async move {
-            tokio::time::sleep(REVEAL_FALLBACK).await;
-            reveal(&app, &id);
-        });
     }
     Ok(showing)
+}
+
+/// Load tabs that aren't on screen yet, out of sight, so they show at once
+/// when opened. Tabs that already have a webview are left alone.
+#[tauri::command]
+async fn preload_tabs(
+    app: AppHandle,
+    window: Window,
+    tabs: State<'_, Mutex<Tabs>>,
+    views: Vec<View>,
+) -> Result<(), String> {
+    let mut tabs = tabs.lock().map_err(|e| e.to_string())?;
+    for view in views {
+        if window.get_webview(&tab_label(&view.id)).is_none() {
+            create_tab(&app, &window, &mut tabs, view)?;
+        }
+    }
+    Ok(())
+}
+
+/// Create tab `view`'s webview offscreen at its size. `reveal` moves it into
+/// place (or hides it, if it isn't wanted on screen) when the first page load
+/// finishes.
+fn create_tab(app: &AppHandle, window: &Window, tabs: &mut Tabs, view: View) -> Result<(), String> {
+    let parsed: tauri::Url = view
+        .url
+        .parse()
+        .map_err(|e| format!("invalid url {}: {e}", view.url))?;
+    let origin = parsed.origin().ascii_serialization();
+    let parsed = restored_url(app, &view.id, parsed);
+    let loaded_id = view.id.clone();
+    let opener = app.clone();
+    let builder = WebviewBuilder::new(tab_label(&view.id), WebviewUrl::External(parsed))
+        .background_color(GROUND)
+        .on_page_load(move |webview, payload| {
+            if payload.event() == PageLoadEvent::Finished {
+                reveal(webview.app_handle(), &loaded_id);
+            }
+        })
+        .on_new_window(move |url, features| {
+            // A sized popup is a sign-in flow (window.open with a size):
+            // keep it, it reports back to the page. A plain new-tab link
+            // goes to the default browser instead of a bare window.
+            if features.size().is_some() {
+                return NewWindowResponse::Allow;
+            }
+            use tauri_plugin_opener::OpenerExt;
+            if matches!(url.scheme(), "http" | "https" | "mailto") {
+                let _ = opener.opener().open_url(url.as_str(), None::<&str>);
+            }
+            NewWindowResponse::Deny
+        });
+    window
+        .add_child(
+            builder,
+            LogicalPosition::new(OFFSCREEN, OFFSCREEN),
+            LogicalSize::new(view.place.bounds.width, view.place.bounds.height),
+        )
+        .and_then(|webview| {
+            // Zoom before the first load so the page lays out at its size.
+            webview.set_zoom(view.place.zoom)?;
+            allow_notifications(&webview, origin);
+            Ok(webview)
+        })
+        .map_err(|e| e.to_string())?;
+    tabs.zooms.insert(view.id.clone(), view.place.zoom);
+    let app = app.clone();
+    let id = view.id;
+    tauri::async_runtime::spawn(async move {
+        tokio::time::sleep(REVEAL_FALLBACK).await;
+        reveal(&app, &id);
+    });
+    Ok(())
 }
 
 /// Hide all tab webviews so the shell's own UI (the command palette) shows,
@@ -508,6 +532,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             show_tabs,
+            preload_tabs,
             hide_tabs,
             set_tab_bounds,
             close_tab,

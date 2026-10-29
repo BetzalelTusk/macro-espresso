@@ -144,3 +144,11 @@ never push. Sign-in work means the sign-in *page* works and persists, not signin
   tabs stopped following resizes; quick divider arrow-key presses dropped steps. Final run:
   17/17 (launch/restore, split fit, shortcuts, swap, keyboard resize + tab follows, close pane,
   palette filter/no-match/Esc/Enter, close-to-tray, single instance, quit leaves nothing).
+- After install (user report: T3 and Paperclip didn't load): tool cleanup ran while holding
+  the shared tool lock, with no time limit, so one slow cleanup stalled both tools; the
+  leftover search could also stop itself before reaching the leftovers. Cleanup now runs
+  off the lock and off the async runtime, gives up after 20s, and skips its own process.
+- Warm-up (user asked for instant tabs): 1.5s after launch every local tool starts and every
+  tab loads hidden. Cold launch with only WhatsApp open: Spotify and Macro ready at 5s, T3
+  paired at 14s, Paperclip at 36s; opening each afterwards takes 7-13 ms. Opening T3 and
+  Paperclip mid warm-up shares the one start (1 T3 server, still paired). Regression 17/17.
