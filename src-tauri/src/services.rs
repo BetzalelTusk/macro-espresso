@@ -43,6 +43,8 @@ struct Spec {
     owned_by_args: bool,
     /// Extra environment for the tool's process.
     env: Vec<(&'static str, String)>,
+    /// When the tool counts as ready to show.
+    ready: Ready,
 }
 
 impl Spec {
@@ -93,6 +95,7 @@ fn spec(id: &str) -> Result<Spec, String> {
             shutdown: None,
             owned_by_args: true,
             env: Vec::new(),
+            ready: Ready { path: "/", body_contains: None },
         }),
         // Paperclip runs on the system's native Node (ARM64 here), about three
         // times faster to start than emulated x64. Its embedded PostgreSQL has
@@ -153,6 +156,12 @@ fn spec(id: &str) -> Result<Spec, String> {
                     // Skip the npm registry lookup at start (up to 2.5s offline).
                     ("PAPERCLIP_UPDATE_CHECK", "0".into()),
                 ],
+                // Its health says "starting" until startup recovery is done;
+                // before that its page shows "Reconnecting to Paperclip".
+                ready: Ready {
+                    path: "/api/health",
+                    body_contains: Some(r#""status":"ok""#),
+                },
                 cwd: home,
             })
         }
@@ -189,29 +198,37 @@ fn port_open(port: u16) -> bool {
     TcpStream::connect_timeout(&addr, Duration::from_millis(300)).is_ok()
 }
 
-/// Whether the tool answers `GET /` without a server error. A listening port is
-/// not enough: T3 Code answers 503 for a while after it binds.
-fn http_ready(port: u16) -> bool {
+/// How to tell a tool is ready for its tab: `GET path` answers without a server
+/// error and, if `body_contains` is set, the body says so. A listening port is
+/// not enough: T3 Code answers 503 for a while after it binds, and Paperclip
+/// serves its page before its API finishes startup recovery.
+struct Ready {
+    path: &'static str,
+    body_contains: Option<&'static str>,
+}
+
+fn http_ready(port: u16, ready: &Ready) -> bool {
     use std::io::{Read, Write};
     let addr = SocketAddr::from(([127, 0, 0, 1], port));
     let Ok(mut stream) = TcpStream::connect_timeout(&addr, Duration::from_millis(300)) else {
         return false;
     };
     let _ = stream.set_read_timeout(Some(Duration::from_secs(2)));
-    let request = format!("GET / HTTP/1.0\r\nHost: 127.0.0.1:{port}\r\n\r\n");
+    let request = format!("GET {} HTTP/1.0\r\nHost: 127.0.0.1:{port}\r\n\r\n", ready.path);
     if stream.write_all(request.as_bytes()).is_err() {
         return false;
     }
-    let mut head = [0u8; 16];
-    let Ok(read) = stream.read(&mut head) else {
-        return false;
-    };
+    // HTTP/1.0: the server closes after the response. Health answers are
+    // small; 64 KiB is plenty and bounds a page that isn't.
+    let mut response = Vec::new();
+    let _ = stream.take(64 * 1024).read_to_end(&mut response);
+    let response = String::from_utf8_lossy(&response);
     // "HTTP/1.1 200 ..." -> the status code sits at bytes 9..12.
-    std::str::from_utf8(&head[..read])
-        .ok()
-        .and_then(|line| line.get(9..12))
+    let ok_status = response
+        .get(9..12)
         .and_then(|code| code.parse::<u16>().ok())
-        .is_some_and(|code| code < 500)
+        .is_some_and(|code| code < 500);
+    ok_status && ready.body_contains.is_none_or(|needle| response.contains(needle))
 }
 
 /// Stop every process whose command line contains one of `markers`.
@@ -333,7 +350,7 @@ pub async fn ensure_service(
         .map_err(|e| e.to_string())?
         .get(&id)
         .is_some_and(|s| s.child.is_some());
-    if http_ready(spec.port) {
+    if http_ready(spec.port, &spec.ready) {
         if ours {
             return take_pairing();
         }
@@ -414,7 +431,7 @@ pub async fn ensure_service(
 
     let begun = Instant::now();
     loop {
-        if http_ready(spec.port) {
+        if http_ready(spec.port, &spec.ready) {
             if let Some(prefix) = spec.pairing_prefix {
                 let offset = {
                     let started = services.0.lock().map_err(|e| e.to_string())?;
