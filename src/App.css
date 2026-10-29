@@ -1,94 +1,96 @@
-:root {
-  --bg: #0b0b0c;
-  --sidebar: #141416;
-  --tab: #1f1f23;
-  --tab-hover: #2a2a30;
-  --accent: #f5f5f5;
-  --text: #e8e8ea;
-  --muted: #8a8a93;
-  font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
-  color: var(--text);
-  background: var(--bg);
-}
-
-* {
-  box-sizing: border-box;
-}
-
-html,
-body,
-#root {
-  margin: 0;
-  height: 100%;
-  overflow: hidden;
-}
-
 .shell {
+  position: relative;
   display: flex;
   height: 100vh;
 }
 
-.sidebar {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  width: 64px;
-  padding: 12px 10px;
-  background: var(--sidebar);
-  border-right: 1px solid #222226;
-}
-
-.tab {
-  width: 44px;
-  height: 44px;
-  border: none;
-  border-radius: 12px;
-  background: var(--tab);
-  color: var(--muted);
-  font-size: 16px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.tab:hover {
-  background: var(--tab-hover);
-  color: var(--text);
-}
-
-.tab.active {
-  background: var(--accent);
-  color: #111;
-}
-
-.content {
+/*
+ * The stage: where tabs appear. Its ambient layer shows while a tab is
+ * loading, starting, failed or empty, and stays (paused) underneath a tab.
+ */
+.stage {
   position: relative;
   flex: 1;
   min-width: 0;
+  background: var(--ground-0);
 }
 
-.placeholder {
+.stage-message {
   display: grid;
-  place-content: center;
-  height: 100%;
-  text-align: center;
-  color: var(--muted);
+  justify-items: center;
+  gap: var(--space-2);
+  max-width: 440px;
+  padding-inline: var(--space-4);
 }
 
-.placeholder h1 {
-  margin: 0 0 8px;
-  color: var(--text);
-  font-weight: 500;
-}
-
-.error {
-  position: absolute;
-  top: 12px;
-  left: 12px;
-  right: 12px;
+.stage-message p {
   margin: 0;
-  padding: 8px 12px;
-  border-radius: 8px;
-  background: #3a1416;
-  color: #ffb4b4;
+}
+
+.stage-eyebrow {
+  font: var(--text-label);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.stage-title {
+  font: var(--text-title);
+  color: var(--ink-1);
+}
+
+.stage-detail {
+  color: var(--ink-2);
+}
+
+.stage-error {
+  max-height: 140px;
+  max-width: 100%;
+  margin: var(--space-2) 0 0;
+  padding: var(--space-3);
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--err-ground);
+  color: var(--ink-2);
+  font: var(--text-label);
+  text-align: start;
   white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.stage-action {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-block-start: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--ground-2);
+  color: var(--ink-1);
+  cursor: pointer;
+  transition: background-color var(--t-micro) var(--ease-out);
+}
+
+.stage-action:hover {
+  background: var(--ground-3);
+}
+
+.stage-action:active {
+  background: var(--ground-4);
+}
+
+/*
+ * Film grain over the whole shell UI (the rail and the stage); tab webviews
+ * sit above it, so websites are never textured. Procedural noise from an
+ * inline feTurbulence filter, not an image asset.
+ */
+.grain {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  opacity: var(--grain-opacity);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.9 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }

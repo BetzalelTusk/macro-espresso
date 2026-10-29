@@ -1,0 +1,106 @@
+/*
+ * The Shell's token layer: every colour, size, radius and timing the UI uses.
+ * Components use these names only; a value missing here is a gap to add here,
+ * never an inline literal. Vocabulary and reasons: PROJECT.md.
+ */
+
+@import "@fontsource-variable/inter";
+
+:root {
+  color-scheme: dark;
+
+  /*
+   * Ground: cool graphite, hue 235. Sampled from the reference's slate
+   * (~#262b2f) and stepped by lightness so the rail, the frame and raised
+   * controls separate by tone rather than by borders.
+   */
+  --ground-0: oklch(0.165 0.008 235); /* behind everything; ambient base */
+  --ground-1: oklch(0.205 0.009 235); /* rail */
+  --ground-2: oklch(0.245 0.01 235); /* frame, content well */
+  --ground-3: oklch(0.3 0.011 235); /* hover, raised control */
+  --ground-4: oklch(0.36 0.012 235); /* pressed, selected control */
+  --line: oklch(0.33 0.01 235); /* hairlines between ground steps */
+
+  --ink-1: oklch(0.94 0.005 235); /* primary text */
+  --ink-2: oklch(0.76 0.008 235); /* secondary text */
+  --ink-3: oklch(0.68 0.01 235); /* labels, hints */
+  --ink-mark: oklch(0.86 0.006 235 / 0.7); /* crosshairs and ticks */
+
+  /*
+   * Colour budget: the accent is the only saturated colour, and it appears
+   * in exactly three places: the active-tab marker, the logo mark, and the
+   * "starting" status dot. Amber → rose picks up the warm umber hidden in the
+   * reference's ambient light.
+   */
+  --accent: oklch(0.82 0.13 72);
+  --accent-2: oklch(0.72 0.15 22);
+  --accent-sweep: linear-gradient(180deg, var(--accent), var(--accent-2));
+
+  --ok: oklch(0.78 0.13 155);
+  --err: oklch(0.7 0.17 25);
+  --err-ground: oklch(0.27 0.05 25);
+
+  /*
+   * Ambient: a lit graphite field with dark smoke drifting over it. The smoke
+   * is darker than the field, never brighter; hue only tints it (navy, olive,
+   * umber), the way the reference's shadows carry colour.
+   */
+  --ambient-field: oklch(0.28 0.01 235);
+  --smoke-navy: oklch(0.13 0.025 255);
+  --smoke-olive: oklch(0.15 0.022 110);
+  --smoke-umber: oklch(0.16 0.03 55);
+  --grain-opacity: 0.11;
+
+  /* Type: one family. Rank comes from weight and ink, not size jumps. */
+  --font: "Inter Variable", "Segoe UI Variable", system-ui, sans-serif;
+  --text-title: 500 15px/1.3 var(--font);
+  --text-body: 400 13px/1.45 var(--font);
+  --text-label: 500 11px/1.2 var(--font);
+  --tracking-label: 0.08em;
+
+  /* Space: 4px base. */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+
+  --rail-width: 60px;
+  --rail-item: 40px;
+
+  --radius-control: 10px;
+  --radius-panel: 14px;
+
+  /* Motion: see PROJECT.md for what each level is allowed to animate. */
+  --t-micro: 140ms;
+  --t-panel: 220ms;
+  --ease-out: cubic-bezier(0.22, 0.8, 0.36, 1);
+  --t-drift: 48s;
+  --t-sweep: 1800ms;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--ground-0);
+  color: var(--ink-1);
+  font: var(--text-body);
+  -webkit-font-smoothing: antialiased;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}

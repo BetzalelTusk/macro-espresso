@@ -1,0 +1,97 @@
+.palette-scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: grid;
+  justify-items: center;
+  align-content: start;
+  padding-block-start: 14vh;
+}
+
+.palette {
+  width: min(560px, calc(100% - 2 * var(--space-6)));
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-panel);
+  background: color-mix(in oklch, var(--ground-1) 82%, transparent);
+  backdrop-filter: blur(24px) saturate(1.2);
+  box-shadow: 0 24px 60px -20px oklch(0 0 0 / 0.6);
+  animation: palette-in var(--t-panel) var(--ease-out);
+}
+
+@keyframes palette-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.985);
+  }
+}
+
+.palette-input {
+  width: 100%;
+  padding: var(--space-4);
+  border: none;
+  border-block-end: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink-1);
+  font: var(--text-title);
+  outline: none;
+}
+
+/* The palette opens focused on its only text field; the caret is the focus cue. */
+.palette-input:focus-visible {
+  outline: none;
+}
+
+.palette-input::placeholder {
+  color: var(--ink-3);
+}
+
+.palette-list {
+  max-height: 340px;
+  margin: 0;
+  padding: var(--space-2);
+  overflow-y: auto;
+  list-style: none;
+}
+
+.palette-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-control);
+  color: var(--ink-2);
+  cursor: pointer;
+}
+
+.palette-item[aria-selected="true"] {
+  background: var(--ground-3);
+  color: var(--ink-1);
+}
+
+.palette-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.palette-hint {
+  font: var(--text-label);
+  letter-spacing: var(--tracking-label);
+  color: var(--ink-3);
+}
+
+.palette-empty {
+  margin: 0;
+  padding: var(--space-6) var(--space-4);
+  color: var(--ink-3);
+  text-align: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .palette {
+    animation: none;
+  }
+}

@@ -25,6 +25,14 @@ struct Spec {
     port: u16,
     /// Log-line prefix of a one-time URL that signs the tab in, printed at startup.
     pairing_prefix: Option<&'static str>,
+    /// A folder only this tool runs programs from. Anything running from it
+    /// that outlived the tool (Paperclip's database survives its Node process,
+    /// and a crash or power loss skips cleanup) is stopped before a start and
+    /// on quit.
+    owned_dir: Option<PathBuf>,
+    /// A program that shuts the tool's helpers down cleanly, run before a
+    /// start and on quit, ahead of any force-stop.
+    shutdown: Option<(PathBuf, Vec<String>)>,
 }
 
 fn env_path(var: &str) -> Result<PathBuf, String> {
@@ -55,6 +63,8 @@ fn spec(id: &str) -> Result<Spec, String> {
             cwd: home,
             port: 3773,
             pairing_prefix: Some("Pairing URL: "),
+            owned_dir: None,
+            shutdown: None,
         }),
         // Paperclip runs on x64 Node: its embedded PostgreSQL has no ARM64
         // Windows build, and x64 runs under Windows' emulation.
@@ -69,9 +79,29 @@ fn spec(id: &str) -> Result<Spec, String> {
                         .into_owned(),
                     "run".into(),
                 ],
-                cwd: home,
                 port: 3100,
                 pairing_prefix: None,
+                // Its PostgreSQL runs under a restricted token that outlives
+                // the Node process; `pg_ctl stop` ends it cleanly.
+                shutdown: Some((
+                    tools.join(
+                        "paperclip/node_modules/@embedded-postgres/windows-x64/native/bin/pg_ctl.exe",
+                    ),
+                    vec![
+                        "stop".into(),
+                        "-D".into(),
+                        home.join(".paperclip/instances/default/db")
+                            .to_string_lossy()
+                            .into_owned(),
+                        "-m".into(),
+                        "fast".into(),
+                        "-w".into(),
+                        "-t".into(),
+                        "15".into(),
+                    ],
+                )),
+                owned_dir: Some(tools.join("paperclip")),
+                cwd: home,
             })
         }
         _ => Err(format!("unknown service {id}")),
@@ -131,6 +161,37 @@ fn http_ready(port: u16) -> bool {
         .and_then(|code| code.parse::<u16>().ok())
         .is_some_and(|code| code < 500)
 }
+
+/// Stop every process started from a program under `dir`.
+///
+/// PostgreSQL runs under a restricted token, which hides its program path from
+/// ordinary process queries, and an orphaned worker survives `pg_ctl stop`
+/// while holding the database's shared memory. WMI still reports the command
+/// line, so match on that, in either slash style.
+#[cfg(windows)]
+fn kill_processes_under(dir: &Path) {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    let back = dir.to_string_lossy().replace('/', "\\");
+    let forward = back.replace('\\', "/");
+    // Single quotes inside a PowerShell single-quoted string are doubled.
+    let quote = |s: &str| format!("'{}'", s.replace('\'', "''"));
+    let script = format!(
+        "$dirs = @({}, {}); Get-CimInstance Win32_Process | Where-Object {{ $c = $_.CommandLine; $c -and ($dirs | Where-Object {{ $c.IndexOf($_, [StringComparison]::OrdinalIgnoreCase) -ge 0 }}) }} | ForEach-Object {{ Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }}",
+        quote(&format!("{back}\\")),
+        quote(&format!("{forward}/")),
+    );
+    let _ = Command::new("powershell")
+        .args(["-NoProfile", "-NonInteractive", "-Command", &script])
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .creation_flags(CREATE_NO_WINDOW)
+        .status();
+}
+
+#[cfg(not(windows))]
+fn kill_processes_under(_dir: &Path) {}
 
 fn last_lines(path: &Path, count: usize) -> String {
     let Ok(file) = File::open(path) else {
@@ -214,6 +275,7 @@ pub async fn ensure_service(
         // A tool that's already listening (started outside the shell, or still
         // warming up) only needs waiting for.
         if !running && !port_open(spec.port) {
+            clean_up_leftovers(&spec);
             let log_offset = std::fs::metadata(&log).map(|m| m.len()).unwrap_or(0);
             let child = spawn(&spec, &log)?;
             started.insert(
@@ -279,11 +341,37 @@ pub async fn ensure_service(
     }
 }
 
+/// End a tool's helpers that may outlive it: a clean shutdown first, then a
+/// force-stop of anything still running from its own folder.
+fn clean_up_leftovers(spec: &Spec) {
+    if let Some((program, args)) = &spec.shutdown {
+        if program.exists() {
+            let mut command = Command::new(program);
+            command
+                .args(args)
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null());
+            #[cfg(windows)]
+            {
+                use std::os::windows::process::CommandExt;
+                const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+                command.creation_flags(CREATE_NO_WINDOW);
+            }
+            let _ = command.status();
+        }
+    }
+    if let Some(dir) = &spec.owned_dir {
+        kill_processes_under(dir);
+    }
+}
+
 /// Stop every tool this shell started, including their child processes.
 pub fn stop_all(services: &Services) {
     let Ok(mut started) = services.0.lock() else {
         return;
     };
+    let specs: Vec<Spec> = started.keys().filter_map(|id| spec(id).ok()).collect();
     for mut child in started.drain().filter_map(|(_, s)| s.child) {
         #[cfg(windows)]
         {
@@ -296,5 +384,8 @@ pub fn stop_all(services: &Services) {
         }
         let _ = child.kill();
         let _ = child.wait();
+    }
+    for spec in &specs {
+        clean_up_leftovers(spec);
     }
 }

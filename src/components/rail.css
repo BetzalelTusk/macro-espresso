@@ -1,0 +1,116 @@
+.rail {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  width: var(--rail-width);
+  padding-block: var(--space-3);
+  background: var(--ground-1);
+  border-inline-end: 1px solid var(--line);
+}
+
+/*
+ * The app's mark: the stage's registration cross, in the accent. One motif
+ * for the brand and the frame, instead of a separate logo shape.
+ */
+.rail-mark {
+  width: 18px;
+  height: 18px;
+  margin-block: var(--space-1) var(--space-3);
+  background: var(--accent-sweep);
+  mask:
+    linear-gradient(#000 0 0) center / 2px 100% no-repeat,
+    linear-gradient(#000 0 0) center / 100% 2px no-repeat;
+}
+
+.rail-tabs {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rail-tab {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: var(--rail-item);
+  height: var(--rail-item);
+  border: none;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--ink-3);
+  cursor: pointer;
+  transition:
+    background-color var(--t-micro) var(--ease-out),
+    color var(--t-micro) var(--ease-out);
+}
+
+.rail-tab:hover {
+  background: var(--ground-3);
+  color: var(--ink-1);
+}
+
+.rail-tab:active {
+  background: var(--ground-4);
+}
+
+.rail-tab[aria-current="page"] {
+  background: var(--ground-3);
+  color: var(--ink-1);
+}
+
+/* Active marker on the rail's inline-start edge. */
+.rail-tab[aria-current="page"]::before {
+  content: "";
+  position: absolute;
+  inset-inline-start: calc((var(--rail-width) - var(--rail-item)) / -2);
+  inset-block: 9px;
+  width: 2px;
+  border-radius: 0 2px 2px 0;
+  background: var(--accent-sweep);
+}
+
+.rail-dot {
+  position: absolute;
+  inset-block-end: 6px;
+  inset-inline-end: 6px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  border: 1.5px solid var(--ground-1);
+  box-sizing: content-box;
+}
+
+.rail-dot[data-dot="busy"] {
+  background: var(--accent);
+  animation: dot-breathe var(--t-sweep) ease-in-out infinite;
+}
+
+.rail-dot[data-dot="running"] {
+  background: var(--ok);
+}
+
+.rail-dot[data-dot="error"] {
+  background: var(--err);
+}
+
+@keyframes dot-breathe {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.rail-palette {
+  margin-block-start: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rail-dot[data-dot="busy"] {
+    animation: none;
+  }
+}
