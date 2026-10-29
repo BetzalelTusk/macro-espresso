@@ -57,6 +57,8 @@ export function useLayout() {
   layoutRef.current = layout;
   const statusesRef = useRef(statuses);
   statusesRef.current = statuses;
+  const hiddenRef = useRef(hidden);
+  hiddenRef.current = hidden;
 
   const setStatus = useCallback((id: string, status: TabStatus) => {
     setStatuses((s) => ({ ...s, [id]: status }));
@@ -175,6 +177,8 @@ export function useLayout() {
   // Keep tab webviews over their panes as the window or the divider moves.
   useEffect(() => {
     const observer = new ResizeObserver(() => {
+      // Hidden tabs (palette, divider drag) get their bounds when re-shown.
+      if (hiddenRef.current) return;
       void invoke("set_tab_bounds", { placements: placements() });
     });
     for (const el of bodies.current.slice(0, layout.panes.length)) {
@@ -186,6 +190,7 @@ export function useLayout() {
   /** Hide every tab so the shell's own UI (the palette) shows. */
   const hideAll = useCallback(async () => {
     generation.current++;
+    hiddenRef.current = true;
     setHidden(true);
     await invoke("hide_tabs");
   }, []);

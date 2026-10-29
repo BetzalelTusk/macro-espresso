@@ -73,9 +73,20 @@ export function Panes({
                   // so follow the mouse on the whole window. The drag shield
                   // (onDragStart) takes the tab webviews out of its way.
                   void onDragStart();
+                  // While dragging, move the split by writing the grid's CSS
+                  // variables once per frame; React state (and the webview
+                  // resize it triggers) updates once, on release.
+                  const grid = container.current;
+                  let ratio = layout.ratio;
+                  let frame = 0;
+                  const paint = () => {
+                    frame = 0;
+                    grid?.style.setProperty("--split-left", `${ratio}fr`);
+                    grid?.style.setProperty("--split-right", `${1 - ratio}fr`);
+                  };
                   const move = (ev: PointerEvent) => {
-                    const ratio = (ev.clientX - box.left) / box.width;
-                    onRatio(Math.min(MAX_RATIO, Math.max(MIN_RATIO, ratio)));
+                    ratio = Math.min(MAX_RATIO, Math.max(MIN_RATIO, (ev.clientX - box.left) / box.width));
+                    if (!frame) frame = requestAnimationFrame(paint);
                   };
                   let ended = false;
                   const end = () => {
@@ -84,6 +95,9 @@ export function Panes({
                     window.removeEventListener("pointermove", move);
                     window.removeEventListener("pointerup", end);
                     window.removeEventListener("pointercancel", end);
+                    if (frame) cancelAnimationFrame(frame);
+                    paint();
+                    onRatio(ratio);
                     onDragEnd();
                   };
                   // Not `blur`: the drag shield moves focus to this webview,
