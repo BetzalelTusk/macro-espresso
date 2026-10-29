@@ -11,6 +11,7 @@ import os
 import shutil
 import sys
 import threading
+import time
 
 from winpty import PtyProcess
 
@@ -47,9 +48,16 @@ def main() -> int:
             out.flush()
         elif not proc.isalive():
             break
-    proc.wait()
+    deadline = time.monotonic() + 5
+    while proc.isalive() and time.monotonic() < deadline:
+        time.sleep(0.05)
     return proc.exitstatus or 0
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    code = main()
+    sys.stdout.flush()
+    # Leave without Python's normal shutdown: pywinpty's teardown crashes
+    # (0xC0000005) after the child exits, and Paperclip reads that exit code
+    # as a failed sign-in even when the token was delivered.
+    os._exit(code)

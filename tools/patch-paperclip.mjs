@@ -4,7 +4,8 @@
 // 1. Claude subscription sign-in: Paperclip runs `claude setup-token` through a
 //    Python `pty` bridge that only exists on Linux/macOS. On Windows it uses
 //    pty_bridge.py (ConPTY via pywinpty) from %LOCALAPPDATA%\shell-tools\pty-bridge.
-// 2. Native ARM64 Node: embedded-postgres has no Windows ARM64 build and refuses
+// 2. A 15-minute sign-in window instead of 5.
+// 3. Native ARM64 Node: embedded-postgres has no Windows ARM64 build and refuses
 //    to start there. Its x64 PostgreSQL runs fine under Windows' emulation, so
 //    ARM64 uses it; the server itself then runs natively (much faster).
 //
@@ -26,6 +27,15 @@ const patches = [
                 child = bridge
                     ? spawn(path.join(bridge, "venv", "Scripts", "python.exe"), ["-u", path.join(bridge, "pty_bridge.py"), executable, ...args], { env, stdio: ["pipe", "pipe", "pipe"], windowsHide: true })
                     : spawn("python3", ["-u", "-c", PYTHON_PTY_BRIDGE, executable, ...args], { env, stdio: ["pipe", "pipe", "pipe"] });`,
+  },
+  {
+    // 5 minutes was too short to get through the provider's browser check and
+    // copy the code back; the attempt itself stays valid for 30 minutes.
+    name: "15 minute sign-in window",
+    file: path.join(modules, "paperclipai/node_modules/@paperclipai/server/dist/services/local-ai-browser-login.js"),
+    find: "timeoutMs: 300_000, signal: controller.signal,",
+    replace: `timeoutMs: 900_000 ${MARK} 15 minute sign-in window */, signal: controller.signal,`,
+    all: true,
   },
   {
     name: "postgres on windows arm64",
@@ -52,7 +62,7 @@ for (const patch of patches) {
     continue;
   }
   if (!fs.existsSync(`${patch.file}.orig`)) fs.copyFileSync(patch.file, `${patch.file}.orig`);
-  source = source.replace(patch.find, patch.replace);
+  source = patch.all ? source.replaceAll(patch.find, patch.replace) : source.replace(patch.find, patch.replace);
   fs.writeFileSync(patch.file, source);
   console.log(`patched: ${patch.name}`);
 }
