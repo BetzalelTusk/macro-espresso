@@ -214,7 +214,7 @@ function App() {
       );
     }
     for (const action of tabActions(focusedTab)) list.push({ ...action });
-    list.push({ id: "quit", label: "Quit Shell", icon: Power, hint: "Ctrl Q", run: quit });
+    list.push({ id: "quit", label: "Quit Macro Espresso", icon: Power, hint: "Ctrl Q", run: quit });
     return list;
   }, [change, focusedTab, layout.panes, quit, tabActions]);
 

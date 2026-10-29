@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- Macro Espresso: Macro's mark (macro-inc/macro, AGPL-3.0) in crema on an espresso tile. -->
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2a1c13"/>
+      <stop offset="1" stop-color="#0c0a09"/>
+    </linearGradient>
+    <linearGradient id="crema" gradientUnits="userSpaceOnUse" x1="0" y1="4" x2="0" y2="20.3">
+      <stop offset="0" stop-color="#f3bb69"/>
+      <stop offset="1" stop-color="#e07560"/>
+    </linearGradient>
+  </defs>
+  <rect x="32" y="32" width="960" height="960" rx="216" fill="url(#tile)"/>
+  <rect x="34" y="34" width="956" height="956" rx="214" fill="none" stroke="#f3bb69" stroke-opacity="0.14" stroke-width="4"/>
+  <g transform="translate(212 208) scale(25)" fill="url(#crema)">
+    <path d="M0 10.014v6.801a.75.75 0 0 0 .225.513l2.742 2.644 2.002-.8v-7.099l-2.97-2.859z"/>
+    <path d="M4.078 4.8v5.786l1.36 1.309v1.313L12.481 20l2.002-.8-.001-7.1L6.078 4z"/>
+    <path d="M13.594 4.8v5.786l1.36 1.311-.013 1.3L22 20 24 19.2V12.42a.75.75 0 0 0-.225-.533L15.595 4z"/>
+  </g>
+</svg>

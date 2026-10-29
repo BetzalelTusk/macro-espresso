@@ -12,17 +12,16 @@
 }
 
 /*
- * The app's mark: the stage's registration cross, in the accent. One motif
- * for the brand and the frame, instead of a separate logo shape.
+ * The app's mark: Macro's three-stroke M (macro-inc/macro), in the accent,
+ * the "crema" that makes this flavour Macro Espresso.
  */
 .rail-mark {
-  width: 18px;
-  height: 18px;
+  width: 22px;
+  height: 15px;
   margin-block: var(--space-1) var(--space-3);
   background: var(--accent-sweep);
-  mask:
-    linear-gradient(#000 0 0) center / 2px 100% no-repeat,
-    linear-gradient(#000 0 0) center / 100% 2px no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 4 24 16.3'%3E%3Cpath d='M0 10.014v6.801a.75.75 0 0 0 .225.513l2.742 2.644 2.002-.8v-7.099l-2.97-2.859z'/%3E%3Cpath d='M4.078 4.8v5.786l1.36 1.309v1.313L12.481 20l2.002-.8-.001-7.1L6.078 4z'/%3E%3Cpath d='M13.594 4.8v5.786l1.36 1.311-.013 1.3L22 20 24 19.2V12.42a.75.75 0 0 0-.225-.533L15.595 4z'/%3E%3C/svg%3E")
+    center / contain no-repeat;
 }
 
 .rail-tabs {

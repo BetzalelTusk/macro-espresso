@@ -104,6 +104,9 @@ const REVEAL_FALLBACK: Duration = Duration::from_secs(12);
 /// A new tab loads off-screen at full size (so pages lay out correctly) and
 /// moves into place once its first page load finishes.
 const OFFSCREEN: f64 = -30_000.0;
+/// The name people see (window, tray). Internals keep the `com.betza.shell`
+/// identifier: it names the data folder that holds every tab's logins.
+const APP_NAME: &str = "Macro Espresso";
 
 /// Where a tab webview goes, in logical pixels, as measured by the UI.
 #[derive(Clone, Copy, serde::Deserialize)]
@@ -455,11 +458,11 @@ fn show_main(app: &AppHandle) {
 }
 
 fn build_tray(app: &tauri::App) -> tauri::Result<()> {
-    let show = MenuItem::with_id(app, "show", "Show Shell", true, None::<&str>)?;
-    let quit = MenuItem::with_id(app, "quit", "Quit Shell", true, None::<&str>)?;
+    let show = MenuItem::with_id(app, "show", format!("Show {APP_NAME}"), true, None::<&str>)?;
+    let quit = MenuItem::with_id(app, "quit", format!("Quit {APP_NAME}"), true, None::<&str>)?;
     let menu = Menu::with_items(app, &[&show, &quit])?;
     let mut tray = TrayIconBuilder::with_id("shell")
-        .tooltip("Shell")
+        .tooltip(APP_NAME)
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_menu_event(|app, event| match event.id.as_ref() {
@@ -500,7 +503,7 @@ pub fn run() {
             let width = 1280.0;
             let height = 800.0;
             let window = WindowBuilder::new(app, "main")
-                .title("Shell")
+                .title(APP_NAME)
                 .inner_size(width, height)
                 .min_inner_size(800.0, 500.0)
                 .theme(Some(tauri::Theme::Dark))
