@@ -1,0 +1,27 @@
+Macro Espresso
+Copyright (c) 2026 Alex (Betzalel) Tusk. Code licensed under the MIT License (see LICENSE).
+
+Macro mark
+----------
+The three-stroke "M" mark used in the app icon (src-tauri/icons, public/macro-espresso.svg)
+and in the UI (src/components/rail.css) is Macro's logo. Its outline comes from
+macro-inc/macro (https://github.com/macro-inc/macro), which is licensed under AGPL-3.0,
+and the name and mark are Macro's trademarks. They are NOT covered by the MIT License in
+this repository. Macro Espresso is an independent personal project and is not affiliated
+with or endorsed by Macro. If you redistribute this app, replace the mark with your own.
+
+Brand icons
+-----------
+The WhatsApp and Spotify marks (src/brand-icons.tsx) are path data from Simple Icons
+(CC0-1.0); the names and marks belong to their owners and are used only to label the tabs
+that open those services. The Paperclip mark is from Paperclip (MIT). The "T3" glyph is
+drawn for this project.
+
+Third-party tools
+-----------------
+Macro Espresso runs, but does not include, these tools:
+  - T3 Code (https://github.com/pingdotgg/t3code), MIT
+  - Paperclip (https://github.com/paperclipai/paperclip), MIT
+  - astro-mdx-editor by Benji Tusk (https://github.com/benjitusk/astro-mdx-editor), MIT
+tools/patch-paperclip.mjs edits an installed copy of Paperclip on Windows; it ships none
+of Paperclip's code.
