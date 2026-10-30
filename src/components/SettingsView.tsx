@@ -8,6 +8,10 @@ import "./settings.css";
 type Props = {
   settings: Settings;
   onChange: (change: Partial<Settings>) => void;
+  /** A newer version waiting in the build folder, if any. */
+  update: { version: string } | null;
+  onCheckUpdate: () => Promise<{ version: string } | null>;
+  onInstallUpdate: () => void;
 };
 
 /** A labelled on/off switch: the whole row is the control. */
@@ -43,7 +47,19 @@ function Toggle({
 }
 
 /** Settings: how Macro Espresso looks and behaves, saved as you change it. */
-export function SettingsView({ settings, onChange }: Props) {
+export function SettingsView({ settings, onChange, update, onCheckUpdate, onInstallUpdate }: Props) {
+  // "idle" until checked here; "checking" while it looks; "current" when it found nothing newer.
+  const [checkState, setCheckState] = useState<"idle" | "checking" | "current" | "failed">("idle");
+  const [installing, setInstalling] = useState(false);
+  const check = async () => {
+    setCheckState("checking");
+    try {
+      const found = await onCheckUpdate();
+      setCheckState(found ? "idle" : "current");
+    } catch {
+      setCheckState("failed");
+    }
+  };
   const tabs = orderedTabs(settings);
   const shownCount = tabs.filter((t) => !settings.hiddenTabs.includes(t.id)).length;
   const [autostart, setAutostart] = useState<boolean | null>(null);
@@ -185,7 +201,53 @@ export function SettingsView({ settings, onChange }: Props) {
           </div>
         </section>
 
-        <footer className="settings-footer">Macro Espresso{version && ` ${version}`}</footer>
+        <section className="settings-section" aria-labelledby="settings-updates">
+          <h2 id="settings-updates" className="settings-heading">
+            Updates
+          </h2>
+          <div className="settings-list">
+            <div className="settings-row">
+              <span className="settings-text">
+                <span className="settings-label">
+                  {update ? `Version ${update.version} is ready` : `Macro Espresso${version && ` ${version}`}`}
+                </span>
+                <span className="settings-detail" role="status">
+                  {update
+                    ? "Installing closes the app, refreshes its tools and opens the new version. Logins and settings stay."
+                    : checkState === "checking"
+                      ? "Checking…"
+                      : checkState === "current"
+                        ? "You're on the newest version."
+                        : checkState === "failed"
+                          ? "Couldn't check for updates."
+                          : "New versions are checked for each time the app starts."}
+                </span>
+              </span>
+              {update ? (
+                <button
+                  type="button"
+                  className="settings-button settings-button-primary"
+                  disabled={installing}
+                  onClick={() => {
+                    setInstalling(true);
+                    onInstallUpdate();
+                  }}
+                >
+                  {installing ? "Installing…" : "Install and restart"}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="settings-button"
+                  disabled={checkState === "checking"}
+                  onClick={() => void check()}
+                >
+                  Check for updates
+                </button>
+              )}
+            </div>
+          </div>
+        </section>
       </div>
     </div>
   );

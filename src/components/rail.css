@@ -104,6 +104,11 @@
   background: var(--err);
 }
 
+/* On the Settings gear: an update is ready to install. */
+.rail-dot[data-dot="update"] {
+  background: var(--accent);
+}
+
 @keyframes dot-breathe {
   50% {
     opacity: 0.35;

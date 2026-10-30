@@ -6,6 +6,7 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import {
   ArrowLeftRight,
   Columns2,
+  Download,
   ExternalLink,
   FileText,
   LogOut,
@@ -110,6 +111,22 @@ function App() {
     },
     [reshow, update],
   );
+
+  // A newer installer in the build folder (updates.rs). Checked a little after
+  // launch, so it never competes with the tabs starting up.
+  const [pendingUpdate, setPendingUpdate] = useState<{ version: string } | null>(null);
+  const checkUpdate = useCallback(async () => {
+    const found = await invoke<{ version: string } | null>("check_update");
+    setPendingUpdate(found);
+    return found;
+  }, []);
+  useEffect(() => {
+    const timer = setTimeout(() => void checkUpdate().catch(() => {}), 8000);
+    return () => clearTimeout(timer);
+  }, [checkUpdate]);
+  const installUpdate = useCallback(() => {
+    void invoke("install_update").catch((e) => alert(`Couldn't start the update: ${e}`));
+  }, []);
 
   // A tab hidden in Settings leaves the screen too.
   useEffect(() => {
@@ -267,9 +284,17 @@ function App() {
       );
     }
     for (const action of tabActions(focusedTab)) list.push({ ...action });
+    if (pendingUpdate) {
+      list.push({
+        id: "install-update",
+        label: `Install update ${pendingUpdate.version} and restart`,
+        icon: Download,
+        run: installUpdate,
+      });
+    }
     list.push({ id: "quit", label: "Quit Macro Espresso", icon: Power, hint: "Ctrl Q", run: quit });
     return list;
-  }, [change, focusedTab, layout.panes, quit, tabActions, tabs]);
+  }, [change, focusedTab, installUpdate, layout.panes, pendingUpdate, quit, tabActions, tabs]);
 
   const paneStatus = (id: string): TabStatus => statuses[id] ?? { state: "idle" };
   const busy = layout.panes.some((id) => ["starting", "loading"].includes(paneStatus(id).state));
@@ -284,6 +309,7 @@ function App() {
       <Rail
         tabs={tabs}
         settingsTab={SETTINGS_TAB}
+        updateReady={pendingUpdate !== null}
         activeId={focusedTab.id}
         shownIds={layout.panes}
         statuses={statuses}
@@ -312,7 +338,13 @@ function App() {
               // Native view: stays mounted (folder, scroll) even under the palette.
               <Files />
             ) : id === SETTINGS_TAB.id ? (
-              <SettingsView settings={settings} onChange={updateSettings} />
+              <SettingsView
+                settings={settings}
+                onChange={updateSettings}
+                update={pendingUpdate}
+                onCheckUpdate={checkUpdate}
+                onInstallUpdate={installUpdate}
+              />
             ) : paletteOpen ? null : (
               <StageMessage tab={tabById(id)} status={paneStatus(id)} onRetry={() => void reload(tabById(id))} />
             )

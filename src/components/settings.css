@@ -206,8 +206,37 @@
   color: var(--err);
 }
 
-.settings-footer {
+.settings-button {
+  flex: none;
+  min-height: 32px;
+  padding-inline: var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--ground-3);
+  color: var(--ink-1);
+  cursor: pointer;
+  transition: background-color var(--t-micro) var(--ease-out);
+}
+
+.settings-button:hover:not(:disabled) {
+  background: var(--ground-4);
+}
+
+.settings-button:disabled {
   color: var(--ink-3);
+  cursor: default;
+}
+
+/* Install: the one action in Settings that matters right now. */
+.settings-button-primary {
+  border-color: transparent;
+  background: var(--accent);
+  color: var(--ground-0);
+}
+
+.settings-button-primary:hover:not(:disabled) {
+  background: var(--accent);
+  filter: brightness(1.08);
 }
 
 @media (prefers-reduced-motion: reduce) {

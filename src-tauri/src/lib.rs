@@ -1,6 +1,7 @@
 mod files;
 mod services;
 mod shortcuts;
+mod updates;
 
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -681,7 +682,9 @@ pub fn run() {
             files::fs_places,
             files::fs_list,
             files::fs_open,
-            files::fs_reveal
+            files::fs_reveal,
+            updates::check_update,
+            updates::install_update
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
