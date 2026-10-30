@@ -245,6 +245,103 @@ fn allow_notifications<R: tauri::Runtime>(webview: &tauri::Webview<R>, origin: S
 #[cfg(not(windows))]
 fn allow_notifications<R: tauri::Runtime>(_webview: &tauri::Webview<R>, _origin: String) {}
 
+/// Clear one site's saved data (cookies, storage, IndexedDB, service workers)
+/// through the tab's own DevTools protocol. Tabs share one profile, so a
+/// profile-wide clear would sign every site out; this touches `origin` only.
+/// The receiver gets whether it worked.
+#[cfg(windows)]
+fn clear_site_data<R: tauri::Runtime>(
+    webview: &tauri::Webview<R>,
+    origin: String,
+) -> std::sync::mpsc::Receiver<bool> {
+    let (tx, rx) = std::sync::mpsc::channel();
+    let failed = tx.clone();
+    let queued = webview.with_webview(move |platform| unsafe {
+        use webview2_com::CallDevToolsProtocolMethodCompletedHandler;
+        use windows_core::HSTRING;
+        let Ok(core) = platform.controller().CoreWebView2() else {
+            let _ = tx.send(false);
+            return;
+        };
+        let params = serde_json::json!({ "origin": origin, "storageTypes": "all" }).to_string();
+        let done = tx.clone();
+        let handler = CallDevToolsProtocolMethodCompletedHandler::create(Box::new(move |result, _json| {
+            let _ = done.send(result.is_ok());
+            Ok(())
+        }));
+        if core
+            .CallDevToolsProtocolMethod(
+                &HSTRING::from("Storage.clearDataForOrigin"),
+                &HSTRING::from(params),
+                &handler,
+            )
+            .is_err()
+        {
+            let _ = tx.send(false);
+        }
+    });
+    if queued.is_err() {
+        let _ = failed.send(false);
+    }
+    rx
+}
+
+#[cfg(not(windows))]
+fn clear_site_data<R: tauri::Runtime>(
+    _webview: &tauri::Webview<R>,
+    _origin: String,
+) -> std::sync::mpsc::Receiver<bool> {
+    let (tx, rx) = std::sync::mpsc::channel();
+    let _ = tx.send(false);
+    rx
+}
+
+/// Sign a tab's site out: close the tab, then clear that site's saved data.
+/// The UI then reopens the tab, which starts fresh (a site whose stored data
+/// broke, like WhatsApp's "database error", gets a clean start).
+///
+/// Closing first matters: a live page holds its database open through the
+/// clear and writes part of it back, which is itself WhatsApp's "database
+/// error". The clear runs from the UI webview, which shares the profile.
+#[tauri::command]
+async fn reset_tab_data(
+    window: Window,
+    tabs: State<'_, Mutex<Tabs>>,
+    id: String,
+    url: String,
+) -> Result<(), String> {
+    let origin = url
+        .parse::<tauri::Url>()
+        .map_err(|e| e.to_string())?
+        .origin()
+        .ascii_serialization();
+    {
+        let mut tabs = tabs.lock().map_err(|e| e.to_string())?;
+        if let Some(webview) = window.get_webview(&tab_label(&id)) {
+            webview.close().map_err(|e| e.to_string())?;
+        }
+        tabs.revealed.remove(&id);
+        tabs.visible.remove(&id);
+        tabs.zooms.remove(&id);
+    }
+    // Let the closed page release its storage before the clear.
+    tokio::time::sleep(Duration::from_millis(800)).await;
+    let ui = window
+        .get_webview(UI_LABEL)
+        .ok_or_else(|| "The app's window isn't ready.".to_string())?;
+    let done = clear_site_data(&ui, origin);
+    let cleared = tauri::async_runtime::spawn_blocking(move || {
+        done.recv_timeout(Duration::from_secs(15)).unwrap_or(false)
+    })
+    .await
+    .map_err(|e| e.to_string())?;
+    if cleared {
+        Ok(())
+    } else {
+        Err("Couldn't clear the site's saved data.".into())
+    }
+}
+
 fn main_window(app: &AppHandle) -> Option<Window> {
     app.get_window("main")
 }
@@ -575,6 +672,7 @@ pub fn run() {
             hide_tabs,
             set_tab_bounds,
             close_tab,
+            reset_tab_data,
             set_close_to_tray,
             quit,
             services::ensure_service,

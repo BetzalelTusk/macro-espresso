@@ -8,6 +8,7 @@ import {
   Columns2,
   ExternalLink,
   FileText,
+  LogOut,
   Power,
   RotateCw,
   SquareX,
@@ -139,12 +140,27 @@ function App() {
         });
       }
       if (tab.kind === "web") {
-        actions.push({
-          id: `browser-${tab.id}`,
-          label: `Open ${tab.name} in your browser`,
-          icon: ExternalLink,
-          run: () => void openUrl(tab.url),
-        });
+        actions.push(
+          {
+            id: `browser-${tab.id}`,
+            label: `Open ${tab.name} in your browser`,
+            icon: ExternalLink,
+            run: () => void openUrl(tab.url),
+          },
+          {
+            // For a site whose saved data broke (WhatsApp: "A database error
+            // occurred on your browser"): clear that site only, reopen fresh.
+            id: `reset-${tab.id}`,
+            label: `Sign out and reset ${tab.name}`,
+            icon: LogOut,
+            run: () => {
+              if (!confirm(`Sign out of ${tab.name} and clear its saved data?\n\nYou'll sign in again. Other tabs stay signed in.`)) return;
+              void invoke("reset_tab_data", { id: tab.id, url: tab.url })
+                .then(() => reload(tab))
+                .catch((e) => alert(`Couldn't reset ${tab.name}: ${e}`));
+            },
+          },
+        );
       }
       if (tab.kind === "local") {
         actions.push(
