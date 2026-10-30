@@ -45,6 +45,21 @@ function measure(el: HTMLElement): Bounds {
 }
 
 /**
+ * Timing trace for tab switches, off unless localStorage `shell:trace` is set:
+ * each step of `apply` is logged to the console with ms since the switch began.
+ */
+let traceStart = 0;
+function trace(step: string) {
+  try {
+    if (!localStorage.getItem("shell:trace")) return;
+  } catch {
+    return;
+  }
+  if (step.startsWith("apply ")) traceStart = performance.now();
+  console.debug(`[apply +${Math.round(performance.now() - traceStart)}ms] ${step}`);
+}
+
+/**
  * Lowest zoom used to fit a site. The narrowest pane (MIN_RATIO of a minimum
  * window) is ~300px, and WhatsApp needs 748px, so this must stay ≤ 0.4.
  */
@@ -148,8 +163,10 @@ export function useLayout({ visibleIds, warmUp }: { visibleIds: string[]; warmUp
       // new pane's header until it's up. Swap the screen over right away: show
       // what's ready, hide the rest; the starting pane shows its message.
       const ready = (tab: Tab) => tab.kind !== "local" || statusesRef.current[tab.id]?.state === "ready";
+      trace(`apply ${next.panes.join("+")}, ready: ${tabs.map((t) => `${t.id}=${ready(t)}`).join(" ")}`);
       if (!tabs.every(ready)) {
         await invoke("show_tabs", { views: viewsFor(ready), focus: next.panes[next.focused] }).catch(() => {});
+        trace("early show_tabs done");
         if (mine !== generation.current) return;
       }
 
@@ -163,12 +180,14 @@ export function useLayout({ visibleIds, warmUp }: { visibleIds: string[]; warmUp
           }
           try {
             await startTool(tab);
+            trace(`tool ${tab.id} ready`);
           } catch (e) {
             setStatus(tab.id, { state: "error", message: String(e) });
           }
         }),
       );
       if (mine !== generation.current) {
+        trace("superseded");
         // A newer layout won; tools that finished starting just aren't shown yet.
         setStatuses((s) => {
           const out = { ...s };
@@ -196,6 +215,7 @@ export function useLayout({ visibleIds, warmUp }: { visibleIds: string[]; warmUp
           views,
           focus: next.panes[next.focused],
         });
+        trace(`show_tabs done, showing: ${showing.join("+") || "none (loading)"}`);
         if (mine !== generation.current) return;
         setStatuses((s) => {
           const out = { ...s };

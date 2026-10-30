@@ -57,7 +57,14 @@ impl Spec {
             markers.push(format!("{}\\", dir.to_string_lossy().replace('/', "\\")));
         }
         if self.owned_by_args {
-            markers.push(self.args.join(" "));
+            // As Windows writes the command line: an argument with a space is
+            // quoted (the Notes site lives in "Macro Espresso Notes").
+            let quoted: Vec<String> = self
+                .args
+                .iter()
+                .map(|arg| if arg.contains(' ') { format!("\"{arg}\"") } else { arg.clone() })
+                .collect();
+            markers.push(quoted.join(" ").replace('/', "\\"));
         }
         markers
     }
@@ -211,6 +218,8 @@ struct Started {
     log_offset: u64,
     /// One-time sign-in URL found in this run's log, handed to the tab once.
     pairing_url: Option<String>,
+    /// A running instance this shell didn't start but uses (and stops on quit).
+    adopted: bool,
 }
 
 #[derive(Default)]
@@ -385,22 +394,27 @@ pub async fn ensure_service(
         .map_err(|e| e.to_string())?
         .get(&id)
         .is_some_and(|s| s.child.is_some());
+    // Take over a running instance this shell didn't start, and remember it,
+    // so later tab switches use it straight away (quitting still stops it).
+    let adopt = || -> Result<Option<String>, String> {
+        let mut started = services.0.lock().map_err(|e| e.to_string())?;
+        started.entry(id.clone()).or_default().adopted = true;
+        Ok(None)
+    };
     if http_ready(spec.port, &spec.ready) {
         if ours {
             return take_pairing();
         }
-        if !spec.owned_by_args {
+        let adopted = services
+            .0
+            .lock()
+            .map_err(|e| e.to_string())?
+            .get(&id)
+            .is_some_and(|s| s.adopted);
+        if adopted || spec.pairing_prefix.is_none() {
             // An orphan from a crash or force-quit that needs no sign-in
-            // (Paperclip): adopt it, so quitting the shell still stops it.
-            if !spec.leftover_markers().is_empty() {
-                services
-                    .0
-                    .lock()
-                    .map_err(|e| e.to_string())?
-                    .entry(id.clone())
-                    .or_default();
-            }
-            return Ok(None);
+            // (Paperclip, Notes): just use it.
+            return adopt();
         }
         // Running, but not started by this run of the shell: an orphan from a
         // crash or force-quit, whose sign-in URL we never saw. Replace it.
@@ -412,8 +426,9 @@ pub async fn ensure_service(
             tokio::time::sleep(Duration::from_millis(250)).await;
         }
         if port_open(spec.port) {
-            // Something else holds the port (not ours to stop); use it as is.
-            return Ok(None);
+            // Something else holds the port (not ours to stop); use it as is,
+            // and don't try (and wait) again on every switch.
+            return adopt();
         }
     }
     if !spec.program.exists() {
@@ -459,6 +474,7 @@ pub async fn ensure_service(
                     child: Some(child),
                     log_offset,
                     pairing_url: None,
+                    adopted: false,
                 },
             );
         }
